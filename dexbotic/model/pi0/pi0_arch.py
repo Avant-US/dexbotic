@@ -111,6 +111,7 @@ class Pi0ForCausalLM(DexboticForCausalLM, ActionOutputForCausalLM):
 
     def _real_init(self, config: Pi0Config):
         self.model = Pi0Model(config)
+        self.lm_head = nn.Linear(config.llm_config.hidden_size, config.llm_config.vocab_size, bias=False)
         self.post_init()
 
     def _inner_forward_mot(

@@ -41,6 +41,7 @@ def parse_args():
 @dataclass
 class Pi0OptimizerConfig(_Pi0OptimizerConfig):
     base_lr: float = field(default=2.5e-5)
+    adam_beta1: float = field(default=0.9)
     adam_beta2: float = field(default=0.95)
     warmup_steps: int = field(default=1000)
     weight_decay: float = field(default=1e-10)
@@ -48,6 +49,10 @@ class Pi0OptimizerConfig(_Pi0OptimizerConfig):
 
 @dataclass
 class Pi0TrainerConfig(_Pi0TrainerConfig):
+    deepspeed: str = field(default=None)
+    use_raw_backward: bool = field(default=True)
+    use_raw_warmup: bool = field(default=True)
+    seed: int = field(default=42)
     bf16: bool = field(default=True)
     num_train_steps: int = field(default=30000)
     save_steps: int = field(default=10000)

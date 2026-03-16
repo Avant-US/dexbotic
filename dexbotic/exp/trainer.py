@@ -1,3 +1,4 @@
+import math
 import os
 from typing import TYPE_CHECKING, Optional
 import shutil
@@ -6,6 +7,7 @@ import torch
 import transformers
 from loguru import logger
 from easydict import EasyDict
+from torch.optim.lr_scheduler import LambdaLR
 from transformers import Trainer, TrainingArguments
 
 from dexbotic.exp.utils import get_mm_adapter_state_maybe_zero_3
@@ -34,6 +36,46 @@ class DexboticTrainer(Trainer):
             self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
 
         return self.optimizer
+
+    def create_scheduler(
+        self, num_training_steps: int, optimizer: torch.optim.Optimizer = None
+    ):
+        use_raw_warmup = getattr(
+            self.exp_config.trainer_config, "use_raw_warmup", False
+        )
+
+        if use_raw_warmup:
+            if optimizer is None:
+                optimizer = self.optimizer
+
+            num_warmup_steps = self.args.warmup_steps
+            min_lr_rate = self.exp_config.trainer_config.lr_scheduler_kwargs.get(
+                "min_lr_rate", 0.1
+            )
+
+            def lr_lambda(current_step: int):
+                if current_step < num_warmup_steps:
+                    init_ratio = 1.0 / (num_warmup_steps + 1)
+                    return (
+                        init_ratio
+                        + (1.0 - init_ratio) * current_step / num_warmup_steps
+                    )
+
+                progress = min(
+                    1.0,
+                    (current_step - num_warmup_steps)
+                    / max(1, num_training_steps - num_warmup_steps),
+                )
+                cos = 0.5 * (1 + math.cos(math.pi * progress))
+                return min_lr_rate + (1.0 - min_lr_rate) * cos
+
+            self.lr_scheduler = LambdaLR(optimizer, lr_lambda)
+            logger.info(
+                f"Using native warmup scheduler: warmup_steps={num_warmup_steps}, min_lr_rate={min_lr_rate}"
+            )
+            return self.lr_scheduler
+        else:
+            return super().create_scheduler(num_training_steps, optimizer)
 
     def _save_checkpoint(self, model, trial, metrics=None) -> None:
         logger.info(f"Saving checkpoint at step {self.state.global_step}")
@@ -106,13 +148,15 @@ class DexboticTrainer(Trainer):
             "lr_scheduler_type": self.exp_config.trainer_config.lr_scheduler_type,
             "lr_scheduler_kwargs": self.exp_config.trainer_config.lr_scheduler_kwargs,
             "run_name": self.exp_config.trainer_config.run_name,
-            'remove_unused_columns': False,
+            "remove_unused_columns": False,
             "deepspeed": self.exp_config.trainer_config.deepspeed,
             "learning_rate": self.exp_config.optimizer_config.base_lr,
             "adam_beta1": self.exp_config.optimizer_config.adam_beta1,
             "adam_beta2": self.exp_config.optimizer_config.adam_beta2,
             "warmup_steps": self.exp_config.optimizer_config.warmup_steps,
             "weight_decay": self.exp_config.optimizer_config.weight_decay,
+            "seed": getattr(self.exp_config.trainer_config, "seed", 42),
+            "data_seed": getattr(self.exp_config.trainer_config, "seed", 42),
         }
         self.added_args = EasyDict({
             "tune_mm_mlp_adapter": self.exp_config.trainer_config.tune_mm_mlp_adapter,
@@ -140,6 +184,46 @@ class DexboticTrainer(Trainer):
     def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
         logs.update(self.loss_cache)
         super().log(logs, start_time)
+
+    def training_step(self, model, inputs, num_items_in_batch=None):
+        use_raw_backward = getattr(
+            self.exp_config.trainer_config, "use_raw_backward", False
+        )
+        if use_raw_backward:
+            return self._custom_training_step(
+                model, inputs, num_items_in_batch, use_raw_backward
+            )
+        else:
+            loss = super().training_step(model, inputs, num_items_in_batch)
+            return loss
+
+    def _custom_training_step(
+        self, model, inputs, num_items_in_batch, use_raw_backward
+    ):
+        model.train()
+        if hasattr(self.optimizer, "train") and callable(self.optimizer.train):
+            self.optimizer.train()
+
+        inputs = self._prepare_inputs(inputs)
+
+        with self.compute_loss_context_manager():
+            loss = self.compute_loss(
+                model, inputs, num_items_in_batch=num_items_in_batch
+            )
+
+        del inputs
+
+        if self.args.n_gpu > 1:
+            loss = loss.mean()
+
+        if (
+            not getattr(self, "model_accepts_loss_kwargs", False)
+            and self.compute_loss_func is None
+        ):
+            loss = loss / self.args.gradient_accumulation_steps
+
+        loss.backward()
+        return loss.detach()
 
 
 def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
