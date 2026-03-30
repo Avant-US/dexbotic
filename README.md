@@ -29,6 +29,7 @@
 
 ## 🔥 News
 
+- **[2026-03-30]** Released a tutorial on integrating [XLeRobot](hardware/docs/xlerobot_inference_example.md) with Dexbotic.
 - **[2026-02-10]** [DM0](docs/DM0.md) released! See the [technical report](https://dexmal.com/DM0_Tech_Report.pdf) for more information.
 - **[2026-02-10]** Partnership Announcement: We are excited to announce a strategic collaboration with [RLinf](https://github.com/RLinf/RLinf). Together, our teams will advance VLA + RL research and applications.
 - **[2026-01-15]** Released a tutorial on integrating [SO-101](hardware/docs/so101_inference_example.md) with Dexbotic.

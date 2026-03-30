@@ -29,6 +29,7 @@
 
 ## 🔥 最新动态
 
+- **[2026-03-30]**  发布了 [XLeRobot](hardware/docs/xlerobot_inference_example.md) 在 Dexbotic 中使用的教程。
 - **[2026-02-10]** [DM0](docs/DM0.md) 正式发布！详情参见 [技术报告](https://dexmal.com/DM0_Tech_Report.pdf)。
 - **[2026-02-10]** 合作公告：我们非常高兴地宣布与 [RLinf](https://github.com/RLinf/RLinf) 达成战略合作。双方将共同推进 VLA + RL 的研究与应用。
 - **[2026-01-15]** 发布了 [SO-101](hardware/docs/so101_inference_example.md) 在 Dexbotic 中使用的教程。
@@ -103,6 +104,7 @@ pip install -e .
 | DB-π0 | 93.9 | 97 | 98.2 | 94 | 86.4 |
 | MemVLA | 96.7 | 98.4 | 98.4 | 96.4 | 93.4 |
 | DB-MemVLA | 97.0 | 97.2 | 99.2 | 98.4 | 93.2 |
+| DB-GR00TN1 | 94.8 | 93.0 | 99.6 | 95.2 | 91.4 |
 
 ### CALVIN
 
