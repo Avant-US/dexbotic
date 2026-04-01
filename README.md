@@ -29,15 +29,17 @@
 
 ## 🔥 News
 
+- **[2026-03-30]** Supported [GR00TN1](playground/benchmarks/libero/libero_gr00tn1.py).
+- **[2026-03-30]** Added [Co-training](dexbotic/exp/hybrid_pi05_exp.py) capability for the Pi05 model.
 - **[2026-03-30]** Released a tutorial on integrating [XLeRobot](hardware/docs/xlerobot_inference_example.md) with Dexbotic.
 - **[2026-02-10]** [DM0](docs/DM0.md) released! See the [technical report](https://dexmal.com/DM0_Tech_Report.pdf) for more information.
 - **[2026-02-10]** Partnership Announcement: We are excited to announce a strategic collaboration with [RLinf](https://github.com/RLinf/RLinf). Together, our teams will advance VLA + RL research and applications.
 - **[2026-01-15]** Released a tutorial on integrating [SO-101](hardware/docs/so101_inference_example.md) with Dexbotic.
 - **[2026-01-15]** Supported [GRPO](docs/RL.md)
 - **[2026-01-15]** Supported [NaVILA](playground/example_navila_exp.py).
-- **[2026-01-08]** Added [Co-training]((dexbotic/exp/hybrid_cogact_exp.py)) capability, enabling joint optimization of action experts and LLMs for the CogACT model. 
+- **[2026-01-08]** Added [Co-training](dexbotic/exp/hybrid_cogact_exp.py) capability, enabling joint optimization of action experts and LLMs for the CogACT model. 
 - **[2026-01-08]** Released a specialized image compatible with [Blackwell GPUs](#blackwell-gpus).
-- **[2025-12-29]** Supported [OFT]((playground/benchmarks/libero/libero_oft.py)) and [Pi0.5](playground/benchmarks/libero/libero_pi05.py) models.
+- **[2025-12-29]** Supported [OFT](playground/benchmarks/libero/libero_oft.py) and [Pi0.5](playground/benchmarks/libero/libero_pi05.py) models.
 - **[2025-10-20]** Dexbotic officially released! Check out the [technical report](https://arxiv.org/pdf/2510.23511) and [official documentation](https://dexbotic.com/docs/) for details.
 
 
