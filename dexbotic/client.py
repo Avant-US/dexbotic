@@ -58,7 +58,6 @@ class DexClient:
             self.action_queue.append(action)
 
             last_act = action
-            self.action_queue.append(action)
 
     def delta_action(self, last_action, delta_action):
         original_action = np.copy(last_action)
