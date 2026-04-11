@@ -1,6 +1,8 @@
 # DM0 深度技术分析
 
-> 本文是对 `docs/DM0_Deep_Analysis.zh-CN.md` 的深度补充。前文覆盖了论文主张、高层一致性和横向比较；本文聚焦六个前文未充分展开的技术盲区，做逐函数、逐公式、逐张量级的下钻分析。
+> 本文是对 `docs/DM0_Deep_Analysis.zh-CN.md` 的深度补充。前文覆盖了论文主张、高层一致性和横向比较；本文聚焦六个前文未充分展开的技术盲区，做逐函数、逐公式、逐张量级的下钻分析。     
+> 仔细分析阅读DM0算法的这篇论文(docs/DM0 An Embodied-Native Vision-Language-Action Model towards Physical AI.pdf). 你需要分析本dexbotic代码库的代码,DM0就是在本代码库中实现的, 参考./docs中的各个文档以及./README.md文档, 参考https://github.com/dexmal/dexbotic中的Issues, Commits, Pull requests和Discussions,也可以参考网上与DM0算法有关的文章或评论. 最终要搞清楚DM0解决了哪些问题?它比同类VLA算法好在什么地方?它用了什么方法,而其中有效的方法又是哪些?能使它比其它同类算法好的方法又是哪些?这个代码库是如何设计与实现DM0的? 实现得与论文一致吗? 要分析得比 docs/DM0_Deep_Analysis.zh-CN.md 更深入, 范围更管, 最后把分析结果写到 bt/dm0bt.md 中, 记住要广泛比较, 深入分析, 详细说明, 必要时要用代码片段和图文并茂地说明(比如各种UML图).     
+
 
 ---
 
