@@ -31,6 +31,13 @@
   - [5.4 DeepSpeed ZeRO 分布式训练](#54-deepspeed-zero-分布式训练)
 - [6. 优化全景图](#6-优化全景图)
 - [7. 超参数影响分析](#7-超参数影响分析)
+- [8. 可配置超参数与配置方法](#8-可配置超参数与配置方法)
+  - [8.1 配置机制概述](#81-配置机制概述)
+  - [8.2 可配置参数参考表](#82-可配置参数参考表)
+  - [8.3 示例 1: Libero 微调配置](#83-示例-1-libero-微调配置)
+  - [8.4 示例 2: Table30 Stack Bowls 配置](#84-示例-2-table30-stack-bowls-配置)
+  - [8.5 DeepSpeed 配置切换](#85-deepspeed-配置切换)
+  - [8.6 硬编码参数速查](#86-硬编码参数速查)
 
 ---
 
@@ -994,37 +1001,39 @@ graph TB
 
 ### 超参数总表
 
-| 类别 | 超参数 | 值 | 源文件:行号 | 影响维度 | 影响机制 |
-|------|-------|---|-----------|---------|---------|
-| **Flow Matching** | time_alpha | 1.5 | dm0_arch.py:435 | 训练精度 | 偏向高噪声训练，提升推理初始去噪质量 |
-| | time_beta | 1.0 | dm0_arch.py:435 | 训练精度 | 配合 alpha 控制分布形状 |
-| | time_range | [0.001, 1.0] | dm0_arch.py:437 | 训练稳定性 | 避免 t=0 的数值问题 |
-| **动作空间** | chunk_size | 50 | dm0_arch.py:42 | 精度+泛化 | 长程轨迹规划能力 |
-| | action_dim | 32 | dm0_arch.py:41 | 泛化性 | 跨具身统一空间 |
-| | delta_action | True | dm0_exp.py:257 | 泛化 +20-25% | 相对位移表征 |
-| **归一化** | use_quantiles | True | dm0_exp.py:258 | 精度 +3-5% | 鲁棒处理异常值和二值分布 |
-| | num_bins | 5000 | normalize.py:30 | 统计精度 | 在线分位数估计精度 |
-| | max_batches | 2500 | dm0_exp.py:141 | 统计稳定性 | 320K 样本足够估计分布 |
-| **增强** | main_scale | 0.95 | augmentations.py:187 | 泛化性 | 轻微位置不变性 |
-| | rotate_limit | ±5° | augmentations.py:189 | 泛化性 | 小角度旋转鲁棒性 |
-| | color_p | 0.5 | augmentations.py:190 | 泛化性 | 50% 概率做光照增强 |
-| | image_pad_mode | "zero" | dm0_exp.py:284 | 精度 | 黑色填充避免边界模糊 |
-| **精度控制** | bf16 | True | dm0_arch.py:43 | 速度+显存 | ~45% 显存节省 |
-| | float32_layers | 6 类 | dm0_arch.py:114-121 | 训练稳定性 | 关键层保留高精度 |
-| | matmul_precision | "high" | dm0_arch.py:92 | 速度 | TF32 加速 2-3x |
-| | mask_value | -2.38e38 | dm0_utils.py:91 | 稳定性 | 避免 bf16 NaN |
-| **优化器** | base_lr | 2.5e-5 | dm0_exp.py:210 | 收敛速度 | |
-| | adam_beta2 | 0.95 | dm0_exp.py:211 | 适应速度 | 14 步半衰期 vs 693 步 |
-| | warmup_steps | 1000 | dm0_exp.py:212 | 训练稳定性 | 渐进启动 |
-| | weight_decay | 1e-10 | dm0_exp.py:213 | 拟合能力 | 几乎无正则化 |
-| | min_lr_rate | 0.1 | dm0_exp.py:240 | 后期精度 | 保持 10% LR 做精细调整 |
-| | max_grad_norm | 1.0 | trainer.py:166 | 训练稳定性 | 防梯度爆炸 |
-| **推理** | diffusion_steps | 10 | dm0_arch.py:521 | 速度/精度权衡 | 10 步 Euler 采样 |
-| | time_min_period | 4e-3 | dm0_utils.py:98 | 时间分辨率 | 高频细粒度时间编码 |
-| | time_max_period | 4.0 | dm0_utils.py:99 | 时间范围 | 低频粗粒度阶段区分 |
-| **分布式** | ZeRO stage | 3 | zero3.json:17 | 显存效率 | ~75% 显存节省 |
-| | gradient_checkpointing | True | dm0_exp.py:236 | 显存效率 | ~30-40% 显存节省 |
-| | num_workers | 16 | dm0_exp.py:237 | 训练吞吐 | 并行数据加载 |
+> **可配置性图例**: ✅ DC = 通过 Dataclass 子类覆盖 | ✅ JSON = 通过 DeepSpeed JSON 文件 | ❌ 硬编码 = 需修改源码 | ❌ 模型固定 = 预训练时确定，微调不可改
+
+| 类别 | 超参数 | 值 | 源文件:行号 | 可配置性 | 影响维度 | 影响机制 |
+|------|-------|---|-----------|---------|---------|---------|
+| **Flow Matching** | time_alpha | 1.5 | dm0_arch.py:435 | ❌ 硬编码 | 训练精度 | 偏向高噪声训练，提升推理初始去噪质量 |
+| | time_beta | 1.0 | dm0_arch.py:435 | ❌ 硬编码 | 训练精度 | 配合 alpha 控制分布形状 |
+| | time_range | [0.001, 1.0] | dm0_arch.py:437 | ❌ 硬编码 | 训练稳定性 | 避免 t=0 的数值问题 |
+| **动作空间** | chunk_size | 50 | dm0_arch.py:42 | ❌ 模型固定 | 精度+泛化 | 长程轨迹规划能力 |
+| | action_dim | 32 | dm0_arch.py:41 | ❌ 模型固定 | 泛化性 | 跨具身统一空间 |
+| | delta_action | True | dm0_exp.py:257 | ❌ 硬编码 | 泛化 +20-25% | 相对位移表征 |
+| **归一化** | use_quantiles | True | dm0_exp.py:258 | ❌ 硬编码 | 精度 +3-5% | 鲁棒处理异常值和二值分布 |
+| | num_bins | 5000 | normalize.py:30 | ❌ 硬编码 | 统计精度 | 在线分位数估计精度 |
+| | max_batches | 2500 | dm0_exp.py:141 | ❌ 硬编码 | 统计稳定性 | 320K 样本足够估计分布 |
+| **增强** | main_scale | 0.95 | augmentations.py:187 | ❌ 硬编码 | 泛化性 | 轻微位置不变性 |
+| | rotate_limit | ±5° | augmentations.py:189 | ❌ 硬编码 | 泛化性 | 小角度旋转鲁棒性 |
+| | color_p | 0.5 | augmentations.py:190 | ❌ 硬编码 | 泛化性 | 50% 概率做光照增强 |
+| | image_pad_mode | "zero" | dm0_exp.py:284 | ✅ DC | 精度 | 黑色填充避免边界模糊 |
+| **精度控制** | bf16 | True | dm0_exp.py:231 | ✅ DC | 速度+显存 | ~45% 显存节省 |
+| | float32_layers | 6 类 | dm0_arch.py:114-121 | ❌ 硬编码 | 训练稳定性 | 关键层保留高精度 |
+| | matmul_precision | "high" | dm0_arch.py:92 | ❌ 硬编码 | 速度 | TF32 加速 2-3x |
+| | mask_value | -2.38e38 | dm0_utils.py:91 | ❌ 硬编码 | 稳定性 | 避免 bf16 NaN |
+| **优化器** | base_lr | 2.5e-5 | dm0_exp.py:210 | ✅ DC | 收敛速度 | |
+| | adam_beta2 | 0.95 | dm0_exp.py:211 | ✅ DC | 适应速度 | 14 步半衰期 vs 693 步 |
+| | warmup_steps | 1000 | dm0_exp.py:212 | ✅ DC | 训练稳定性 | 渐进启动 |
+| | weight_decay | 1e-10 | dm0_exp.py:213 | ✅ DC | 拟合能力 | 几乎无正则化 |
+| | min_lr_rate | 0.1 | dm0_exp.py:240 | ✅ DC | 后期精度 | 保持 10% LR 做精细调整 |
+| | max_grad_norm | 1.0 | trainer.py:166 | ❌ 硬编码 | 训练稳定性 | 防梯度爆炸 |
+| **推理** | diffusion_steps | 10 | dm0_arch.py:521 | ❌ 硬编码 | 速度/精度权衡 | 10 步 Euler 采样 |
+| | time_min_period | 4e-3 | dm0_utils.py:98 | ❌ 硬编码 | 时间分辨率 | 高频细粒度时间编码 |
+| | time_max_period | 4.0 | dm0_utils.py:99 | ❌ 硬编码 | 时间范围 | 低频粗粒度阶段区分 |
+| **分布式** | ZeRO stage | 3 | zero3.json:17 | ✅ JSON | 显存效率 | ~75% 显存节省 |
+| | gradient_checkpointing | True | dm0_exp.py:236 | ✅ DC | 显存效率 | ~30-40% 显存节省 |
+| | num_workers | 16 | dm0_exp.py:237 | ✅ DC | 训练吞吐 | 并行数据加载 |
 
 ### 超参数交互关系
 
@@ -1051,4 +1060,344 @@ KV_cache ←→ merged_attention
 
 ---
 
-**文档版本**: v1.0 | **基于代码库**: dexbotic (commit d9943a7) | **日期**: 2026-04-11
+## 8. 可配置超参数与配置方法
+
+上一节的超参数总表中可以看到，DM0 的超参数分为**可配置**（✅ DC / ✅ JSON）和**硬编码**（❌）两类。本节专门介绍可配置参数的完整列表、配置机制和实际使用示例。
+
+### 8.1 配置机制概述
+
+DM0 **不使用**传统的命令行参数解析（没有 `--learning_rate`、`--batch_size` 等 flag）。唯一的 CLI 参数是 `--task`（可选 `train` / `inference` / `compute_norm_stats`）。
+
+所有超参数通过 **Python dataclass 继承与覆盖**机制进行配置。配置层次为三层：
+
+```mermaid
+graph TD
+    subgraph "第1层: 基础配置 (base_exp.py)"
+        A1["OptimizerConfig<br/>base_lr=2e-5, adam_beta2=0.999"]
+        A2["TrainerConfig<br/>deepspeed=zero3.json, bf16=True"]
+        A3["DataConfig<br/>num_images=1, aug_policy='v3'"]
+        A4["ActionConfig<br/>trajectory_length=16, delta=True"]
+        A5["ModelConfig<br/>model_name_or_path=None"]
+    end
+    subgraph "第2层: DM0 默认配置 (dm0_exp.py)"
+        B1["DM0OptimizerConfig<br/>base_lr=2.5e-5, adam_beta2=0.95"]
+        B2["DM0TrainerConfig<br/>num_train_steps=30000, batch=4"]
+        B3["DM0DataConfig<br/>num_images=3, aug='dm0'"]
+        B4["DM0ActionConfig<br/>trajectory_length=50"]
+        B5["DM0ModelConfig<br/>model='DM0-base'"]
+    end
+    subgraph "第3层: 任务配置 (用户自定义)"
+        C1["LiberoOptimizerConfig<br/>base_lr=5e-5"]
+        C2["LiberoTrainerConfig<br/>num_train_steps=80000"]
+        C3["LiberoDataConfig<br/>dataset='libero_pi0_all'"]
+    end
+
+    A1 -->|"继承 + 覆盖"| B1
+    A2 -->|"继承 + 覆盖"| B2
+    A3 -->|"继承 + 覆盖"| B3
+    A4 -->|"继承 + 覆盖"| B4
+    A5 -->|"继承 + 覆盖"| B5
+    B1 -->|"继承 + 覆盖"| C1
+    B2 -->|"继承 + 覆盖"| C2
+    B3 -->|"继承 + 覆盖"| C3
+```
+
+**配置方式**：创建一个 Python 文件，子类化 DM0 的 dataclass 配置类，在 `field(default=...)` 中设置新的默认值。例如要将学习率改为 `5e-5`，只需：
+
+```python
+from dataclasses import dataclass, field
+from dexbotic.exp.dm0_exp import DM0OptimizerConfig as _DM0OptimizerConfig
+
+@dataclass
+class DM0OptimizerConfig(_DM0OptimizerConfig):
+    base_lr: float = field(default=5e-5)  # 覆盖默认值 2.5e-5
+```
+
+此外，**DeepSpeed 配置**通过独立的 JSON 文件管理（`script/deepspeed/zero3.json`），由 `TrainerConfig.deepspeed` 字段指定路径。
+
+**源文件**:
+- 基础配置: `dexbotic/exp/base_exp.py:60-616`
+- DM0 配置: `dexbotic/exp/dm0_exp.py:199-365`
+- Trainer 映射: `dexbotic/exp/trainer.py:130-168`
+
+### 8.2 可配置参数参考表
+
+以下列出所有可通过 dataclass 继承或 JSON 文件配置的超参数，按配置类分组。
+
+#### DM0OptimizerConfig（优化器）
+
+**源文件**: `dexbotic/exp/dm0_exp.py:208-225`
+
+| 参数 | DM0 默认值 | 类型 | 说明 |
+|------|-----------|------|------|
+| `base_lr` | 2.5e-5 | float | 基础学习率 |
+| `adam_beta1` | 0.9 | float | Adam 一阶动量系数（继承自基类） |
+| `adam_beta2` | 0.95 | float | Adam 二阶动量系数 |
+| `adam_epsilon` | 1e-8 | float | Adam 数值稳定性常数（继承自基类） |
+| `warmup_steps` | 1000 | int | 学习率预热步数 |
+| `weight_decay` | 1e-10 | float | 权重衰减 |
+| `optim` | "adamw_torch" | str | 优化器类型（继承自基类） |
+| `mm_projector_lr` | None | float? | 多模态投影层独立学习率（继承自基类） |
+| `mm_vision_lr` | None | float? | 视觉编码器独立学习率（继承自基类） |
+| `action_head_lr` | None | float? | 动作头独立学习率（继承自基类） |
+
+#### DM0TrainerConfig（训练器）
+
+**源文件**: `dexbotic/exp/dm0_exp.py:228-240`（DM0 覆盖），`base_exp.py:206-259`（基类）
+
+| 参数 | DM0 默认值 | 类型 | 说明 |
+|------|-----------|------|------|
+| `output_dir` | None | str? | 检查点保存目录 |
+| `num_train_steps` | 30000 | int | 总训练步数 |
+| `num_train_epochs` | 1 | int | 训练轮数（继承自基类） |
+| `per_device_train_batch_size` | 4 | int | 每 GPU batch 大小 |
+| `gradient_accumulation_steps` | 1 | int | 梯度累积步数 |
+| `save_steps` | 10000 | int | 检查点保存间隔 |
+| `save_total_limit` | 1 | int | 最大检查点保留数（继承自基类） |
+| `logging_steps` | 1 | int | 日志记录间隔 |
+| `model_max_length` | 200 | int | 最大序列长度 |
+| `bf16` | True | bool | 是否使用 bfloat16 |
+| `tf32` | True | bool | 是否使用 TF32 矩阵乘法（继承自基类） |
+| `gradient_checkpointing` | True | bool | 是否启用梯度检查点 |
+| `dataloader_num_workers` | 16 | int | 数据加载并行 worker 数 |
+| `lr_scheduler_type` | "cosine_with_min_lr" | str | 学习率调度器类型 |
+| `lr_scheduler_kwargs` | {"min_lr_rate": 0.1} | dict | 调度器额外参数 |
+| `deepspeed` | "./script/deepspeed/zero3.json" | str? | DeepSpeed 配置文件路径（继承自基类） |
+| `wandb_project` | "dexbotic" | str | Weights & Biases 项目名（继承自基类） |
+| `tune_mm_mlp_adapter` | False | bool | 是否仅训练多模态适配器（继承自基类） |
+
+> **注意**: `lr_scheduler_kwargs` 支持两种语义：
+> - `{"min_lr_rate": 0.1}` — 相对比例，最终 LR = base_lr × 0.1
+> - `{"min_lr": 5e-6}` — 绝对值，最终 LR = 5e-6
+
+#### DM0DataConfig（数据）
+
+**源文件**: `dexbotic/exp/dm0_exp.py:267-312`
+
+| 参数 | DM0 默认值 | 类型 | 说明 |
+|------|-----------|------|------|
+| `dataset_name` | None | str | 数据集标识符 |
+| `num_images` | 3 | int | 相机视角数 |
+| `aug_policy` | ["dm0", "color_dm0", "color_dm0"] | list[str] | 各视角增强策略 |
+| `image_pad_mode` | "zero" | str | 图像填充模式 |
+| `image_aspect_ratio` | "pad" | str | 图像长宽比处理（继承自基类） |
+| `auto_norm` | True | bool | 是否自动计算归一化统计量（继承自基类） |
+
+> **注意**: `aug_policy` 中可用的增强策略名称定义在 `augmentations.py` 的 `NAME2AUG` 字典中，包括：`"dm0"` (裁切+旋转+颜色)、`"color_dm0"` (仅颜色)、`"identity"` (不增强) 等。
+
+#### DM0ActionConfig（动作处理）
+
+**源文件**: `dexbotic/exp/dm0_exp.py:243-264`
+
+| 参数 | DM0 默认值 | 类型 | 说明 |
+|------|-----------|------|------|
+| `trajectory_length` | 50 | int | 动作轨迹序列长度 |
+| `statistic_mapping` | None | str? | 归一化统计量 JSON 文件路径 |
+
+#### DM0ModelConfig（模型）
+
+**源文件**: `dexbotic/exp/dm0_exp.py:199-205`
+
+| 参数 | DM0 默认值 | 类型 | 说明 |
+|------|-----------|------|------|
+| `model_name_or_path` | "./checkpoints/DM0-base" | str | 预训练模型路径 |
+| `chat_template` | "dexbotic" | str | 对话模板（继承自基类） |
+| `mm_vision_tower` | "openai/clip-vit-large-patch14-336" | str | 视觉编码器路径（继承自基类） |
+| `freeze_llm` | False | bool | 是否冻结语言模型（继承自基类） |
+| `freeze_mm_projector` | False | bool | 是否冻结多模态投影层（继承自基类） |
+| `freeze_mm_vision` | False | bool | 是否冻结视觉编码器（继承自基类） |
+
+#### DM0InferenceConfig（推理）
+
+**源文件**: `dexbotic/exp/dm0_exp.py:316-365`
+
+| 参数 | DM0 默认值 | 类型 | 说明 |
+|------|-----------|------|------|
+| `model_name_or_path` | None | str? | 推理模型路径 |
+| `port` | 7891 | int | Flask 推理服务端口 |
+| `action_dim` | 7 | int | 输出动作维度（截断用，非模型维度） |
+| `non_delta_mask` | [6] | list[int] | 非 delta 的动作维度索引（如夹爪） |
+| `num_images` | 3 | int | 推理时相机视角数 |
+| `save_image` | False | bool | 是否保存调试图像 |
+
+#### DeepSpeed JSON 配置
+
+**可用配置文件**: `script/deepspeed/` 目录
+
+| 文件 | ZeRO Stage | 特点 | 适用场景 |
+|------|-----------|------|---------|
+| `zero3.json` | 3 | 参数+梯度+优化器全分片 | 8×A100/H100（默认） |
+| `zero2.json` | 2 | 梯度+优化器分片 | 显存充足时更快 |
+| `zero3_offload.json` | 3 | 全分片 + CPU 卸载 | 8×RTX 4090 |
+
+### 8.3 示例 1: Libero 微调配置
+
+**源文件**: `playground/benchmarks/libero/libero_dm0.py`
+
+此示例展示如何针对 Libero 基准测试修改 DM0 配置。核心差异用注释标出：
+
+```python
+from dataclasses import dataclass, field
+from dexbotic.exp.dm0_exp import DM0Exp as _DM0Exp
+from dexbotic.exp.dm0_exp import DM0OptimizerConfig as _DM0OptimizerConfig
+from dexbotic.exp.dm0_exp import DM0TrainerConfig as _DM0TrainerConfig
+from dexbotic.exp.dm0_exp import DM0DataConfig as _DM0DataConfig
+
+@dataclass
+class DM0OptimizerConfig(_DM0OptimizerConfig):
+    base_lr: float = field(default=5e-5)       # 2.5e-5 → 5e-5 (学习率翻倍)
+    adam_beta2: float = field(default=0.95)     # 保持不变
+    warmup_steps: int = field(default=1000)     # 保持不变
+    weight_decay: float = field(default=1e-10)  # 保持不变
+
+@dataclass
+class DM0TrainerConfig(_DM0TrainerConfig):
+    wandb_project: str = field(default="dm0_sft_libero")  # 独立的 W&B 项目
+    num_train_steps: int = field(default=80000)             # 30000 → 80000 (更多训练)
+    save_steps: int = field(default=5000)                   # 10000 → 5000 (更频繁保存)
+    save_total_limit: int = field(default=20)               # 1 → 20 (保留更多检查点)
+    per_device_train_batch_size: int = field(default=4)     # 保持不变
+    gradient_accumulation_steps: int = field(default=2)     # 1 → 2 (有效 batch 翻倍)
+    output_dir: str = field(default="./user_checkpoints/dexbotic/libero_dm0/libero-0412")
+    lr_scheduler_kwargs: dict = field(
+        default_factory=lambda: {"min_lr": 5e-6}           # min_lr_rate=0.1 → min_lr=5e-6
+    )                                                        # (改用绝对值而非相对比例)
+    dataloader_num_workers: int = field(default=4)          # 16 → 4 (减少数据加载开销)
+
+@dataclass
+class DM0DataConfig(_DM0DataConfig):
+    dataset_name: str = field(default="libero_pi0_all")     # 指定 Libero 数据集
+    num_images: int = field(default=3)                       # 保持不变
+    aug_policy: list[str] = field(
+        default_factory=lambda: ["dm0", "color_dm0", "color_dm0"]  # 保持不变
+    )
+
+@dataclass
+class DM0Exp(_DM0Exp):
+    optimizer_config: DM0OptimizerConfig = field(default_factory=DM0OptimizerConfig)
+    trainer_config: DM0TrainerConfig = field(default_factory=DM0TrainerConfig)
+    data_config: DM0DataConfig = field(default_factory=DM0DataConfig)
+
+if __name__ == "__main__":
+    exp = DM0Exp()
+    exp.train()
+```
+
+**启动命令**:
+
+```bash
+# 8 GPU 分布式训练
+torchrun --nproc_per_node=8 playground/benchmarks/libero/libero_dm0.py --task train
+
+# 或使用 deepspeed launcher
+deepspeed playground/benchmarks/libero/libero_dm0.py --task train
+```
+
+**与 DM0 默认值的关键差异**:
+
+| 参数 | DM0 默认值 | Libero 值 | 变更原因 |
+|------|-----------|----------|---------|
+| `base_lr` | 2.5e-5 | 5e-5 | Libero 数据量较小，加快收敛 |
+| `num_train_steps` | 30000 | 80000 | 更充分训练以提升精度 |
+| `gradient_accumulation_steps` | 1 | 2 | 有效 batch = 4×2×8GPU = 64 |
+| `lr_scheduler_kwargs` | {"min_lr_rate": 0.1} | {"min_lr": 5e-6} | 使用绝对最低学习率 |
+| `save_total_limit` | 1 | 20 | 评估多个检查点选最优 |
+
+### 8.4 示例 2: Table30 Stack Bowls 配置
+
+**源文件**: `playground/benchmarks/table30/dm0_stack_bowls.py`
+
+此示例展示针对 Table30 中单任务（叠碗）的精简配置：
+
+```python
+@dataclass
+class DM0TrainerConfig(_DM0TrainerConfig):
+    wandb_project: str = field(default="dm0_sft_table30")
+    num_train_steps: int = field(default=40_000)    # 30000 → 40000
+    save_steps: int = field(default=2000)            # 10000 → 2000 (单任务快速迭代)
+    model_max_length: int = field(default=100)       # 200 → 100 (单任务 prompt 更短)
+    output_dir: str = field(
+        default="./user_checkpoints/dexbotic/table30_dm0/stack_bowls-0412"
+    )
+
+@dataclass
+class DM0DataConfig(_DM0DataConfig):
+    dataset_name: str = field(default="table30_stack_bowls")  # 指定 Table30 数据集
+```
+
+**启动命令**:
+
+```bash
+torchrun --nproc_per_node=8 playground/benchmarks/table30/dm0_stack_bowls.py --task train
+```
+
+**与 DM0 默认值的关键差异**:
+
+| 参数 | DM0 默认值 | Table30 值 | 变更原因 |
+|------|-----------|-----------|---------|
+| `num_train_steps` | 30000 | 40000 | 单任务稍需更多训练 |
+| `save_steps` | 10000 | 2000 | 小数据集上快速迭代 |
+| `model_max_length` | 200 | 100 | 单任务指令较短，节省显存 |
+
+### 8.5 DeepSpeed 配置切换
+
+DeepSpeed 配置通过 `TrainerConfig.deepspeed` 字段指定 JSON 文件路径。切换方法：
+
+```python
+@dataclass
+class MyTrainerConfig(_DM0TrainerConfig):
+    # 切换到 ZeRO-3 + CPU 卸载（适合 RTX 4090）
+    deepspeed: str = field(default="./script/deepspeed/zero3_offload.json")
+```
+
+三个预置配置文件的核心差异：
+
+```json
+// zero3.json (默认)
+{"zero_optimization": {"stage": 3, "overlap_comm": true}}
+
+// zero2.json (更快但更费显存)
+{"zero_optimization": {"stage": 2, "overlap_comm": true}}
+
+// zero3_offload.json (低显存 GPU)
+{"zero_optimization": {"stage": 3, "overlap_comm": true},
+ "offload_optimizer": {"device": "cpu", "pin_memory": true}}
+```
+
+也可以完全禁用 DeepSpeed（单 GPU 调试时有用）：
+
+```python
+@dataclass
+class DebugTrainerConfig(_DM0TrainerConfig):
+    deepspeed: str = field(default=None)  # 禁用 DeepSpeed
+```
+
+### 8.6 硬编码参数速查
+
+以下参数在当前代码中硬编码，无法通过配置机制修改，需直接编辑源码：
+
+| 参数 | 值 | 硬编码位置 | 修改影响 |
+|------|---|-----------|---------|
+| time_alpha | 1.5 | `dm0_arch.py:435` — `Beta(1.5, 1.0)` | 需重新训练 |
+| time_beta | 1.0 | `dm0_arch.py:435` — `Beta(1.5, 1.0)` | 需重新训练 |
+| time_range | [0.001, 0.999] | `dm0_arch.py:436-437` — `* 0.999 + 0.001` | 需重新训练 |
+| action_dim (模型) | 32 | `dm0_arch.py:41` — `DM0Config` | 预训练固定，改变需完全重训 |
+| chunk_size | 50 | `dm0_arch.py:42` — `DM0Config` | 预训练固定，改变需完全重训 |
+| delta_action | True | `dm0_exp.py:257` — Pipeline 内 `DeltaAction(enable=True)` | 需重新训练 |
+| use_quantiles | True | `dm0_exp.py:258` — Pipeline 内 `ActionNorm(..., use_quantiles=True)` | 需重新训练+统计量 |
+| diffusion_steps | 10 | `dm0_arch.py:521` — 函数默认参数 | 仅影响推理，可传参覆盖 |
+| max_grad_norm | 1.0 | `trainer.py:166` — 直接赋值 | 需重新训练 |
+| matmul_precision | "high" | `dm0_arch.py:92` — `torch.set_float32_matmul_precision("high")` | 影响全局精度 |
+| mask_value | -2.38e38 | `dm0_utils.py:91` — bf16 安全极值 | 通常不需修改 |
+| float32_layers | 6 类 | `dm0_arch.py:114-121` — 层名列表 | 需重新训练 |
+| time_min_period | 4e-3 | `dm0_utils.py:98` — 函数默认参数 | 需重新训练 |
+| time_max_period | 4.0 | `dm0_utils.py:99` — 函数默认参数 | 需重新训练 |
+| num_bins | 5000 | `normalize.py:30` — 类常量 | 影响归一化统计精度 |
+| max_batches | 2500 | `dm0_exp.py:141` — 循环条件 | 影响统计量计算 |
+| augmentation 参数 | 见 7.超参数总表 | `augmentations.py:183-192` — 策略函数内 | 需重新训练 |
+
+> **提示**: `diffusion_steps` 虽然硬编码为函数默认参数，但可在调用 `inference_action()` 时通过参数传入覆盖，无需修改源码。
+
+---
+
+**文档版本**: v1.1 | **基于代码库**: dexbotic (commit d9943a7) | **日期**: 2026-04-12
