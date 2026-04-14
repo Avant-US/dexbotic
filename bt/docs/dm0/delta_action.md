@@ -1490,3 +1490,453 @@ DeltaAction 负责把未来目标改写成相对当前状态的动作差，
 ```
 
 如果不做这一步，DM0 在旋转维上的标签、统计量、损失和推理恢复都会失真；做了这一步，模型才真正学到“局部连续、几何合理”的相对动作表示。
+
+## 12. trajectory_length和chunk_size的关系
+
+这一节专门回答一个在阅读 DM0 代码时非常容易混淆的问题：
+
+```text
+DM0 的 trajectory_length=50 和模型里的 chunk_size=50，到底是不是一回事？
+```
+
+先给结论：
+
+1. **语义上，它们都在表达“未来动作块长度”**
+2. **实现上，它们不在同一层，也不是同一个变量**
+3. **在当前 `dexbotic` 的 DM0 实现里，它们应当保持相等**
+4. **改其中一个，不会自动联动修改另一个**
+
+### 12.1 两个参数分别属于哪一层
+
+| 参数 | 所在层 | 当前默认值 | 控制什么 | 本质含义 |
+|---|---|---:|---|---|
+| `trajectory_length` | 数据预处理层 | `50` | `AddTrajectory` 把单步动作扩成多长的未来轨迹块 | 训练标签的时间长度 |
+| `chunk_size` | 模型配置层 | `50` | 模型 forward / sampling 的动作序列长度 | 模型一次建模的时间长度 |
+
+也就是说：
+
+- `trajectory_length` 决定的是“老师给学生多长的监督答案”
+- `chunk_size` 决定的是“学生一次输出多长的动作序列”
+
+在当前 DM0 实现里，老师给 `50` 步，学生也输出 `50` 步，所以两者语义上高度对应。
+
+### 12.2 数据侧：`trajectory_length` 是怎么生效的
+
+DM0 的动作处理链在 `DM0ActionConfig.build_action_process_func()` 中定义：
+
+```python
+@dataclass
+class DM0ActionConfig(ActionConfig):
+    trajectory_length: int = field(default=50)
+
+    def build_action_process_func(self) -> Pipeline:
+        statistic_mapping = self._read_norm_stats(self.statistic_mapping)
+        action_config = Pipeline(
+            [
+                ToDict(),
+                ToNumpy(),
+                AddAction(predict_length=1),
+                PadState(ndim=32, axis=-1),
+                PadAction(ndim=32, axis=-1),
+                AddTrajectory(trajectory_length=50, flatten=False, padding_mode="last"),
+                DeltaAction(enable=True),
+                ActionNorm(statistic_mapping=statistic_mapping, use_quantiles=True),
+                LoadMultiModal(return_masks=True),
+                ToList(),
+            ]
+        )
+```
+
+这里有一个非常重要的实现细节：
+
+```text
+虽然 DM0ActionConfig 有 trajectory_length 字段，
+但 AddTrajectory(...) 当前是写死 50 的，
+并没有直接使用 self.trajectory_length。
+```
+
+`AddTrajectory` 自己的实现是：
+
+```python
+episode_data_dict['meta_data']['trajectory_length'] = self.trajectory_length
+action = episode_data_dict['action']  # shape: N D
+
+trajectory = [action]
+for i in range(1, self.trajectory_length):
+    _next_action = np.copy(action[i:])
+    _next_action = self.pad(_next_action, len(action), non_delta_mask)
+    trajectory.append(_next_action)
+
+trajectory = np.stack(trajectory, axis=-1)  # N D T
+trajectory = np.transpose(trajectory, (0, 2, 1))  # N T D
+episode_data_dict['action'] = trajectory
+```
+
+这说明：
+
+- 数据侧最终会构造出 `[N, T, D]`
+- 其中 `T = trajectory_length`
+
+所以数据侧的 `trajectory_length` 的真实含义是：
+
+```text
+每个训练样本的未来动作块长度
+```
+
+### 12.3 模型侧：`chunk_size` 是怎么生效的
+
+模型配置里有独立的 `chunk_size`：
+
+```python
+class DM0Config(DexboticConfig):
+    action_dim: int = 32
+    chunk_size: int = 50
+```
+
+训练 forward 时，模型按 `chunk_size` 取 suffix 的动作 token：
+
+```python
+suffix_out_final = suffix_out[:, -self.model.config.chunk_size :]
+v_t = self.model.action_out_proj(suffix_out_final)
+action_loss = F.mse_loss(v_t, u_t, reduction="mean")
+```
+
+推理时采样噪声的形状也直接由 `chunk_size` 决定：
+
+```python
+noise = torch.normal(
+    0,
+    1,
+    size=(batch_size, self.model.config.chunk_size, self.config.action_dim),
+    device=device,
+    dtype=dtype,
+)
+```
+
+因此模型侧的 `chunk_size` 的真实含义是：
+
+```text
+模型一次前向/采样要处理多少个动作时间步
+```
+
+### 12.4 两者的关系图
+
+```mermaid
+flowchart LR
+    trajLen["trajectory_length\n数据侧标签长度"] --> trajBuild["AddTrajectory\n构造 future action chunk"]
+    trajBuild --> trainTarget["训练目标\n[N, T, D]"]
+    chunkSize["chunk_size\n模型侧时间长度"] --> modelForward["DM0 forward / inference"]
+    trainTarget --> modelForward
+    modelForward --> modelOut["模型输出\n[B, chunk_size, action_dim]"]
+```
+
+这张图表达的是：
+
+- `trajectory_length` 决定数据给出的监督目标长度
+- `chunk_size` 决定模型自身处理与输出的长度
+- 在当前 DM0 里，这两条链必须对齐
+
+### 12.5 如果我把 trajectory_length 改成 32，chunk_size 会自动变成 32 吗
+
+不会。
+
+原因有两个：
+
+1. `trajectory_length` 和 `chunk_size` 是两个独立变量
+2. 当前 `DM0ActionConfig` 里的 `AddTrajectory(...)` 还写死成了 `50`
+
+所以如果你只改：
+
+```python
+trajectory_length: int = 32
+```
+
+那很可能出现的情况是：
+
+- 配置字段看起来是 `32`
+- 数据侧真正 `AddTrajectory(...)` 仍然还是 `50`
+- 模型里的 `chunk_size` 也仍然还是 `50`
+
+因此更准确地说：
+
+```text
+当前实现里，trajectory_length 和 chunk_size 都要分别手动核对和修改。
+```
+
+### 12.6 两者的数值可以不同吗
+
+从概念上说，可以不同，因为它们不是同一个参数。  
+但从**当前 DM0 实现**来说，通常不应该不同。
+
+#### 情况 A：`trajectory_length > chunk_size`
+
+例如：
+
+```text
+trajectory_length = 50
+chunk_size = 32
+```
+
+这意味着数据给模型的 `actions` 是 `[B, 50, 32]`，而模型只输出后 `32` 个时间步。  
+这样很容易在 loss 计算时出现时间维不一致的问题。
+
+#### 情况 B：`trajectory_length < chunk_size`
+
+例如：
+
+```text
+trajectory_length = 32
+chunk_size = 50
+```
+
+这种情况有时不会立刻报 shape 错，但会产生更隐蔽的训练/推理语义错位：
+
+- 训练数据只监督 32 步
+- 推理时模型却按 50 步去采样输出
+
+也就是说：
+
+```text
+训练看到的 horizon 和推理输出的 horizon 不一致
+```
+
+这通常比直接报错更危险。
+
+### 12.7 当前实现里应满足的约束条件
+
+在当前 `dexbotic/DM0` 实现里，最重要的约束是：
+
+```text
+trajectory_length == chunk_size
+```
+
+除此之外，还应满足：
+
+| 约束 | 原因 |
+|---|---|
+| `trajectory_length == chunk_size` | 数据监督长度必须与模型时间维一致 |
+| 有效 episode 长度 `>= trajectory_length` | `AddTrajectory` 默认不启用 `padding_action`，长度不足会断言失败 |
+| 训练和推理使用同一 horizon | 否则会出现语义错位 |
+| 修改 horizon 后最好重算 `norm_stats` | DM0 的统计量是在 `Pad -> Trajectory -> Delta` 后的目标空间上统计的 |
+| 旧 checkpoint 不能想当然直接当作新 horizon 模型用 | 原 checkpoint 的训练时间视界可能与新设定不一致 |
+
+### 12.8 一个实用判断标准
+
+如果你问：
+
+```text
+“DM0 的 trajectory_length=50 是不是就是 chunk_size=50？”
+```
+
+最准确的回答不是“完全是”，也不是“完全不是”，而是：
+
+```text
+它们在当前实现里共同指向同一个 50 步动作块长度，
+但一个是数据侧参数，一个是模型侧参数。
+语义上必须对齐，实现上需要分别维护。
+```
+
+### 12.9 一句话总结
+
+你可以把它记成：
+
+```text
+trajectory_length = 数据侧 chunk 长度
+chunk_size       = 模型侧 chunk 长度
+当前 DM0 默认两者都为 50，并且最好始终保持相等
+```
+
+## 13. 变量"N, B, T, D"的含义以及它们在数据流中的变化
+
+阅读 DM0 数据流时，最容易混淆的就是下面四个字母：
+
+- `N`
+- `B`
+- `T`
+- `D`
+
+它们都可能出现在类似 `[N, T, D]`、`[B, T, D]` 这样的张量形状里，但表示的含义并不一样。
+
+### 13.1 四个维度分别是什么意思
+
+| 符号 | 含义 | 所属层面 |
+|---|---|---|
+| `N` | 单个 episode 内部可形成的时间样本数 | 轨迹时间维 |
+| `B` | 一次并行送进模型的样本数 | batch 维 |
+| `T` | 每个样本对应的未来动作块长度 | 时间 horizon |
+| `D` | 动作向量维度，进入模型前通常 pad 到 32 | 特征维 |
+
+其中最容易混的是：
+
+- `N` 不是 batch size
+- `B` 才是 batch size
+
+### 13.2 一个最简直观解释
+
+你可以这样理解：
+
+- `N`：一条轨迹里有多少个时间位置可拿来训练
+- `B`：一次训练拿多少个时间位置并行处理
+- `T`：每个时间位置往未来看多少步
+- `D`：每一步动作有多少维
+
+### 13.3 完整形状流转图
+
+下面这张图把 `DM0` 从原始 episode 到最终送进模型的完整维度流转串起来：
+
+```mermaid
+flowchart TD
+    raw["原始单个 episode\nstate: [N+1, D_raw]"] --> addAction["AddAction"]
+    addAction --> aligned["对齐后\nstate: [N, D_raw]\naction: [N, D_raw]"]
+    aligned --> pad["PadState / PadAction"]
+    pad --> padded["Pad 后\nstate: [N, 32]\naction: [N, 32]"]
+    padded --> addTraj["AddTrajectory(T=50)"]
+    addTraj --> traj["轨迹块\nstate: [N, 32]\naction: [N, T, 32]"]
+    traj --> delta["DeltaAction / ActionNorm"]
+    delta --> deltaOut["单个 episode 内部目标\naction: [N, T, 32]"]
+    deltaOut --> pick["DexDataset 按 frame_index 取一个样本"]
+    pick --> sample["单样本\nstate: [32]\naction: [T, 32]"]
+    sample --> collate["DataLoader collate"]
+    collate --> batch["模型输入 batch\nstate: [B, 32]\naction: [B, T, 32]"]
+```
+
+### 13.4 完整形状流转表
+
+| 阶段 | 操作 | `state` 形状 | `action` 形状 | 这里的主角是谁 |
+|---|---|---:|---:|---|
+| 1 | 原始 episode | `[N+1, D_raw]` | 通常还未构造成监督目标 | `N+1` |
+| 2 | `AddAction` | `[N, D_raw]` | `[N, D_raw]` | `N` |
+| 3 | `PadState / PadAction` | `[N, 32]` | `[N, 32]` | `N, D` |
+| 4 | `AddTrajectory` | `[N, 32]` | `[N, T, 32]` | `N, T, D` |
+| 5 | `DeltaAction / ActionNorm` | `[N, 32]` | `[N, T, 32]` | `N, T, D` |
+| 6 | `DexDataset` 取一个 `frame_index` | `[32]` | `[T, 32]` | `T, D` |
+| 7 | DataLoader 拼 batch | `[B, 32]` | `[B, T, 32]` | `B, T, D` |
+| 8 | 模型训练/推理 | `[B, 32]` | `[B, T, 32]` | `B, T, D` |
+
+### 13.5 每一步的语义流转表
+
+不仅形状会变化，`action` 的语义也会变化。下面这张表把“形状变化”和“语义变化”放在一起看。
+
+| 阶段 | 操作 | `state` 形状 | `action` 形状 | 此时 `action` 的语义 |
+|---|---|---:|---:|---|
+| 1 | 原始 episode | `[N+1, D_raw]` | 未统一 | 原始数据，还不是 DM0 最终监督目标 |
+| 2 | `AddAction` | `[N, D_raw]` | `[N, D_raw]` | **未来绝对目标** |
+| 3 | `PadState / PadAction` | `[N, 32]` | `[N, 32]` | 仍是**未来绝对目标** |
+| 4 | `AddTrajectory` | `[N, 32]` | `[N, T, 32]` | **未来绝对轨迹块** |
+| 5 | `DeltaAction` | `[N, 32]` | `[N, T, 32]` | **未来 delta 轨迹块** |
+| 6 | `ActionNorm` | `[N, 32]` | `[N, T, 32]` | **归一化后的未来 delta 轨迹块** |
+| 7 | 取单样本 | `[32]` | `[T, 32]` | 单个训练样本的 delta 轨迹块 |
+| 8 | 拼 batch | `[B, 32]` | `[B, T, 32]` | batch 级 delta 轨迹块 |
+| 9 | 推理后 `ActionDenorm` | `[B, 32]` | `[B, T, 32]` | **反归一化后的 delta 轨迹块** |
+| 10 | 推理后 `AbsoluteAction` | `[B, 32]` | `[B, T, 32]` | **未来绝对轨迹块** |
+
+也就是说，DM0 的 `action` 在整条链路中至少经历了三次关键语义变化：
+
+```text
+未来绝对目标
+-> 未来绝对轨迹块
+-> 未来 delta 轨迹块
+-> 推理后再恢复成未来绝对轨迹块
+```
+
+### 13.6 为什么 `N` 不是 batch size
+
+`N` 出现在 `AddTrajectory` 这样的数据变换里，代表的是：
+
+```text
+单个 episode 内部有多少个时间位置可以形成训练样本
+```
+
+例如：
+
+- 原始 episode 有 `101` 帧状态
+- `AddAction(predict_length=1)` 后可形成 `100` 个监督位置
+- 那么 `N = 100`
+
+这时数据形状可能是：
+
+```text
+state:  [100, 32]
+action: [100, 50, 32]
+```
+
+这里的 `100` 不是 batch，而是单条轨迹内部的时间长度。
+
+### 13.7 为什么 `B` 才是 batch size
+
+真正送入模型前，`DexDataset` 不会把整条 `[N, T, D]` 一次都送进去，而是先按 `frame_index` 取其中一个样本：
+
+```python
+data = self.action_process_func(episode_data_list, meta_data=meta_data)
+if isinstance(data, list):
+    data = data[frame_index]
+```
+
+此时：
+
+```text
+state:  [D]
+action: [T, D]
+```
+
+然后多个这样的样本再由 DataLoader 拼成 batch：
+
+```text
+state:  [B, D]
+action: [B, T, D]
+```
+
+模型 forward 里也明确把：
+
+```python
+batch_size = actions.shape[0]
+```
+
+当作 batch size 使用。
+
+### 13.8 一个具体数字例子
+
+假设：
+
+- 原始 episode 有 `101` 帧状态
+- `D_raw = 7`
+- `trajectory_length = 50`
+- pad 后 `D = 32`
+- DataLoader 一次取 `B = 16`
+
+那么数据流就是：
+
+| 阶段 | `state` | `action` |
+|---|---|---|
+| 原始 | `[101, 7]` | 无 |
+| `AddAction` 后 | `[100, 7]` | `[100, 7]` |
+| Pad 后 | `[100, 32]` | `[100, 32]` |
+| `AddTrajectory` 后 | `[100, 32]` | `[100, 50, 32]` |
+| `DeltaAction` 后 | `[100, 32]` | `[100, 50, 32]` |
+| 取单样本后 | `[32]` | `[50, 32]` |
+| 拼 batch 后 | `[16, 32]` | `[16, 50, 32]` |
+
+这里：
+
+- `100` 是 `N`
+- `16` 是 `B`
+- `50` 是 `T`
+- `32` 是 `D`
+
+### 13.9 一句话总结
+
+你可以把这四个符号记成下面这句话：
+
+```text
+N 是单条轨迹里的时间样本数，
+B 是一次并行训练的样本数，
+T 是每个样本往未来看的动作块长度，
+D 是每一步动作的特征维度。
+```
+
+如果把 DM0 的数据流再压缩成一句话，就是：
+
+```text
+单个 episode 先在时间维上形成 [N, T, D] 的监督目标，
+再从中按 frame_index 取单样本，最后由 DataLoader 拼成 [B, T, D] 送进模型。
+```
