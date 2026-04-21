@@ -181,7 +181,7 @@ class Pi05ActionConfig(ActionConfig):
                 AddAction(predict_length=1),
                 AddTrajectory(trajectory_length=50, flatten=False, padding_mode="last"),
                 DeltaAction(enable=True),
-                ActionNorm(statistic_mapping=statistic_mapping, use_quantiles=True),
+                ActionNorm(statistic_mapping=statistic_mapping, strict=False, use_quantiles=True),
                 PadState(ndim=32, axis=-1),
                 PadAction(ndim=32, axis=-1),
                 LoadMultiModal(return_masks=True),
