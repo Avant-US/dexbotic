@@ -29,6 +29,7 @@
 
 ## 🔥 News
 
+- **[2026-04-27]** Supported [RLinf as an RL backend](docs/RLinfAsRLBackend.md) for RL post-training.
 - **[2026-03-30]** Supported [GR00TN1](playground/benchmarks/libero/libero_gr00tn1.py).
 - **[2026-03-30]** Added [Co-training](dexbotic/exp/hybrid_pi05_exp.py) capability for the Pi05 model.
 - **[2026-03-30]** Released a tutorial on integrating [XLeRobot](hardware/docs/xlerobot_inference_example.md) with Dexbotic.

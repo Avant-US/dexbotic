@@ -21,6 +21,7 @@ Dexbotic owns the model definition, policy adapter, and experiment config. RLinf
 provides the backend services that are hard to rebuild well: cluster launch,
 worker placement, rollout collection, environment workers, FSDP actor training,
 checkpointing, logging, and embodied RL orchestration.
+This update supports `dexbotic_pi0` and `dexbotic_dm0`.
 
 ## Runtime Environment
 
@@ -187,13 +188,11 @@ For the same policy, algorithm, and effective config, these two launch styles
 should produce the same behavior and training results. The difference is the
 entrypoint and user experience, not the underlying RL execution engine.
 
-RLinf as frontend:
+The figure below summarizes both perspectives together: it includes
+frontend/backend comparison views and additional training-effect results in one
+place.
 
-![RLinf as frontend](./as_frontend.png)
-
-Dexbotic with RLinf as backend:
-
-![RLinf as backend](./as_backend.png)
+![RLinf frontend/backend comparison and training results](./rl_results.png)
 
 In other words, Dexbotic-as-entrypoint is intended to be operationally smoother
 for Dexbotic users, while keeping training semantics aligned with the original
