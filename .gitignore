@@ -183,3 +183,5 @@ dexbotic/data/data_source/*.py
 !dexbotic/data/data_source/register.py
 !dexbotic/data/data_source/uninavid_official.py
 dexbotic/norm_assets
+
+user_checkpoints
