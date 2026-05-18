@@ -185,3 +185,5 @@ dexbotic/data/data_source/*.py
 dexbotic/norm_assets
 
 user_checkpoints
+log/
+logs/

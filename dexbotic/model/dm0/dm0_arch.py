@@ -136,11 +136,14 @@ class DM0ForCausalLM(DexboticForCausalLM, ActionOutputForCausalLM):
             self.model.to_bfloat16_for_selected_params()
         else:
             self.model = self.model.to(torch.float32)
-        # Add lm_head for compatibility with parent class tie_weights
         self.lm_head = nn.Linear(
             config.llm_config.hidden_size, config.llm_config.vocab_size, bias=False
         )
         self.post_init()
+
+    def tie_lm_head(self):
+        """Tie lm_head to embed_tokens (call after from_pretrained to survive weight loading)."""
+        self.lm_head.weight = self.model.llm.embed_tokens.weight
 
     def _compute_merged_layer(
         self,
@@ -639,3 +642,103 @@ class DM0ForCausalLM(DexboticForCausalLM, ActionOutputForCausalLM):
 
         v_t = self.model.action_out_proj(suffix_out[:, -self.model.config.chunk_size :])
         return x_t + v_t * dt, time + dt
+
+    @torch.no_grad()
+    def generate(
+        self,
+        input_ids: torch.LongTensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        images: Optional[torch.FloatTensor] = None,
+        image_masks: Optional[torch.BoolTensor] = None,
+        max_new_tokens: int = 256,
+        do_sample: bool = False,
+        temperature: float = 0.0,
+        eos_token_id: int = None,
+        **kwargs,
+    ) -> torch.LongTensor:
+        """Auto-regressive token generation for DM0.
+
+        Adapted from HybridPi05ForCausalLM.generate (hybrid_pi05_arch.py:672-810).
+        Only runs the LLM side; action_expert receives None throughout.
+
+        Returns:
+            generated_tokens: [B, T_gen] of token ids (excluding the prompt).
+        """
+        if input_ids is None:
+            raise ValueError("input_ids is required")
+
+        batch_size = input_ids.shape[0]
+        device = input_ids.device
+
+        if eos_token_id is None:
+            eos_token_id = getattr(self.config, "eos_token_id", None)
+            if eos_token_id is None and hasattr(self.config, "llm_config"):
+                eos_token_id = getattr(self.config.llm_config, "eos_token_id", None)
+
+        # --- Step 1: encode prefix (images + text) → KV cache ---
+        prefix_hs, prefix_pad_mask, prefix_attn_mask = (
+            self.get_prefix_hidden_states(input_ids, attention_mask, images, image_masks)
+        )
+        prefix_pad_mask = prefix_pad_mask.bool()
+        prefix_attn_2d = make_attn_mask_2d(prefix_pad_mask, prefix_attn_mask)
+        prefix_attn_4d = make_attn_mask_4d(prefix_attn_2d, dtype=prefix_hs.dtype)
+        prefix_positions = torch.cumsum(prefix_pad_mask.long(), dim=1) - 1
+
+        if self.model.config.bf16:
+            prefix_hs = prefix_hs.to(torch.bfloat16)
+
+        module_list = [self.model.llm, self.model.action_expert.model]
+        (prefix_out, _), kv_cache = self._merged_attention_forward(
+            module_list=module_list,
+            attention_mask=prefix_attn_4d,
+            position_ids=prefix_positions,
+            past_key_values=DynamicCache(),
+            input_embeds_list=[prefix_hs, None],
+            use_cache=True,
+        )
+
+        context_mask = prefix_pad_mask.clone()  # tracks all valid positions
+
+        # --- Step 2: auto-regressive decode loop ---
+        generated_tokens = torch.empty((batch_size, 0), dtype=torch.long, device=device)
+        logits = self.lm_head(prefix_out[:, -1:])
+        finished = torch.zeros(batch_size, dtype=torch.bool, device=device)
+
+        for _step in range(max_new_tokens):
+            if do_sample and temperature > 0:
+                probs = torch.softmax(logits.squeeze(1) / temperature, dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)
+            else:
+                next_token = logits.squeeze(1).argmax(dim=-1, keepdim=True)
+
+            if eos_token_id is not None:
+                finished = finished | (next_token.squeeze(1) == eos_token_id)
+
+            generated_tokens = torch.cat([generated_tokens, next_token], dim=1)
+            context_mask = torch.cat(
+                [context_mask, torch.ones((batch_size, 1), dtype=torch.bool, device=device)],
+                dim=1,
+            )
+
+            if finished.all():
+                break
+
+            token_embeds = self.model.embed_language_tokens(next_token)
+            if self.model.config.bf16:
+                token_embeds = token_embeds.to(torch.bfloat16)
+
+            decode_position = context_mask.long().sum(dim=1, keepdim=True) - 1
+            decode_mask_2d = context_mask[:, None, :]
+            decode_mask_4d = make_attn_mask_4d(decode_mask_2d, dtype=token_embeds.dtype)
+
+            (decode_out, _), kv_cache = self._merged_attention_forward(
+                module_list=module_list,
+                attention_mask=decode_mask_4d,
+                position_ids=decode_position,
+                past_key_values=kv_cache,
+                input_embeds_list=[token_embeds, None],
+                use_cache=True,
+            )
+            logits = self.lm_head(decode_out[:, -1:])
+
+        return generated_tokens
