@@ -3,17 +3,9 @@
 
 ## 任务
 + 通用分类
-    - open-loop, close-loop, 短程任务, 长程任务, 与环境单论交互, 与环境多轮交互, 需要推理规划, 需要拆分多个子任务, 需要人机交互, 需要多轮人机交互, 中断, 中断并转做其它任务
-+ 常识与科学
-+ 推理, 数学, 代码
-+ 物理与空间知识
-+ 方法论抽取
-+ VQA
-+ 空间Grounding
-+ 动作Grounding
-+ 预测
-+ 生成
-+ 世界模型相关任务
+    - open-loop, close-loop, 短程任务, 长程任务, 与环境单论交互, 与环境多轮交互, 需要推理规划, 需要拆分多个子任务, 需要人机交互, 需要多轮人机交互, 中断, 中断并转做其它任务, 其它类型的任务
++ 初略分类有这几种: 常识与科学,推理, 数学, 代码, 物理与空间知识, 方法论抽取, VQA, 物体识别, 空间Grounding, 动作Grounding, 动作轨迹生成, 分类, 回归, 预测, 生成, 世界模型相关任务, 其它类型任务
++ 有哪几种任务? 用的什么Loss Function 或者 Reward 计算方法? 为了做这些任务, 数据要怎么处理, 比如要标注label, 训练Reward Model, 收集或生成ground truth等地方. 
 
 ## 数据及其处理
 + 数据来源,包含什么内容及其数据量.
@@ -129,20 +121,3 @@
 + 在close loop 或长程任务上表现如何, 在这方面采取了什么优化.
 + 有没有做消融实验, 哪些优化手段使模型得到了提升, 为什么; 哪些优化手段没使模型得到提升, 为什么.
 
----
-
-
-
-@dm0.md 中提到
-Hybrid Gradient: 
-**动作**:量化为 255-bin 的特殊 action tokens
-混合损失函数: **L_text**（交叉熵） + **L_FM (Flow Matching loss)** + **L_AR (自回归交叉熵)**
-梯度隔离 或 Knowledge Insulation
-
-**Embodied Spatial Scaffolding 的层次化辅助任务**(都通过 L_AR 监督):
-1. **Subtask prediction**:预测细粒度子任务描述
-2. **Goal bounding box prediction**:预测目标物体/区域的 bbox
-3. **End-effector trajectory prediction**:预测主视角下未来若干帧的 EEF 2D 轨迹
-4. **Discrete action prediction**:预测离散 action token
-
-> 这里**没有**单独的 affordance head,也没有专门的 reward / value head;一切辅助监督都通过自回归文本预测来实现 —— 这是一种"text-as-everything"的简洁设计。

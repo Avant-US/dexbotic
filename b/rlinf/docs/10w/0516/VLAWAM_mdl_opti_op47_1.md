@@ -542,7 +542,7 @@ graph LR
 graph LR
   A[Wan2.1-I2V-14B<br/>14B 自回归 video diffusion] --> B[DreamZero 2026.02<br/>arXiv 2602.15922<br/>视频+动作联合去噪<br/>5.7s/chunk → 38× 优化]
   B --> C[DreamZero-Flash<br/>1-step 去噪<br/>150 ms/chunk @ 7Hz<br/>解耦 video/action noise]
-  B --> D[GigaWorld-Policy 2026.03<br/>arXiv 2603.17240<br/>9× 推理加速 + 7%]
+  B --> D["GigaWorld-Policy 2026.03<br/>arXiv 2603.17240<br/>9× 推理加速 + 7%"]
   B --> E[STARRY 2026.04<br/>arXiv 2604.26848<br/>时空+动作联合去噪<br/>真机 42.5 → 70.8 +28.3 pp]
   B --> F[DreamDojo 2026.02<br/>44K h ego video<br/>10.81 FPS 实时 >1 min]
 ```
@@ -589,7 +589,7 @@ graph LR
 ```mermaid
 graph LR
   A[V-JEPA 1 2024<br/>Meta 视频自监督] --> B[V-JEPA 2 2025]
-  B --> C[V-JEPA 2.1 2026.03<br/>arXiv 2603.14482<br/>4 核心要素<br/>Franka 抓取 +20%]
+  B --> C["V-JEPA 2.1 2026.03<br/>arXiv 2603.14482<br/>4 核心要素<br/>Franka 抓取 +20%"]
   D[Dreamer V3 2023] --> E[Dreamer V4 2025.09<br/>arXiv 2509.24527<br/>Shortcut Forcing<br/>Minecraft 钻石 offline]
 ```
 
@@ -614,7 +614,7 @@ graph LR
   A[OXE 1M traj] --> B[DROID 76k]
   B --> C[AgiBot World 2024.10<br/>1M+ traj 217 任务]
   D[Tutor Data Factory 2025-2026<br/>100 台 Sonny] --> E[Tutor Ti0 2026]
-  F[Scanford 2025.11<br/>arXiv 2511.19647] --> G[VLM 32% → 71.8%]
+  F[Scanford 2025.11<br/>arXiv 2511.19647] --> G["VLM 32% → 71.8%"]
   H[GigaWorld-0 2025.11<br/>arXiv 2511.19861] --> I[GigaTrain FP8 + sparse]
   J[Nimbus 2026.01<br/>arXiv 2601.21449] --> K[InternDataEngine 2026.03<br/>2-3× 吞吐]
 ```
