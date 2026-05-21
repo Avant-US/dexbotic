@@ -17,6 +17,7 @@
 - **模型大小**：参数量、骨干与动作头、数值格式等。
 - **算力**：GPU/TPU、训练时长与算力预算等。
 - **世界模型用法**：WM/WAM/视频生成等在模型中的用法、消融验证、正负影响与量化提升；未使用则写「未使用」。
+- **预训练简介**：论文是否有独立的预训练阶段（区别于仅使用现成预训练 VLM 骨干），以及预训练数据、目标函数、模型组件、规模等关键信息。
 - **提及**：原 [vla_sota_ls.md](vla_sota_ls.md) 同一论文「提及」列为 √ 的打 √，否则留空。
 
 ## π0.5 对比基线
@@ -71,6 +72,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Chameleon-7B 主干（冻结）+ ~127M 可训练（80M LoRA + 47M 预测头）；flow-matching 一次出 16 步动作
 - **算力**：Stage I：384×A100-80GB，~18 天（~166k A100·h）；Stage II LoRA：8×A100，3–4 天；全参微调备选 7–10 天
 - **世界模型用法**：**对象可寻址 WAM**：Chameleon-7B 主干 + **world head 回归下一帧 per-slot 状态**（N+1 对象槽位），与 flow-matching 动作头联合训练；非显式 RGB/视频扩散。消融：仅 **addr 键 cross-slot 注意力 + 残差流地址槽位重置** 显著提升 LIBERO-Plus 几何轴 swap-binding（cosine 0.87 vs holistic ≤0.09），LIBERO 分布内几乎不变（**正面、OOD 专用**）。
+- **预训练简介**：无独立预训练阶段。直接基于预训练的 Chameleon-7B 作为 VLM 主干（冻结），结合 SAM3/DINOv3/Qwen3-VL 等感知模块，在 LIBERO 基准上通过 LoRA 进行微调训练。
 - **提及**：√
 
 ## 2026-05-07 · ConsisVLA-4D: Advancing Spatiotemporal Consistency in Efficient 3D-Perception and 4D-Reasoning for Robotic Manipulation
@@ -86,6 +88,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：在基线 VLA 上约 +2B 参数（主要 VGGT）
 - **算力**：训练 4× NVIDIA A800；真机推理单卡 RTX 5090
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。基于 OpenVLA 预训练骨干网络，融合 SigLIP、DINOv2 和 VGGT 视觉编码器实现 4D 一致性表征，直接在下游任务上进行 LoRA 微调。
 - **提及**：
 
 ## 2026-05-05 · RLDX-1: A Dexterity-First Foundation Model for Robot Hands
@@ -96,11 +99,12 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **Other Benchmark**：ALLEX 人形真机长程任务 ≈ 86.8%（较 π0.5 / GR00T N1.6 提升约 40pp）
 - **比 Pi0.5 好**：LIBERO **+0.1pp**；LIBERO-Plus 较 π0 **+30.6pp**；RoboCasa 较 π0 **+8.1pp**；SimplerEnv 较 π0 **+5.9pp**；真机较 π0.5 / GR00T N1.6 **~+40pp**
 - **简介**：**Multi-Stream Action Transformer (MSAT)** 显式融合 Cognition (Qwen3-VL-8B 视觉问答) / Physics（触觉、力矩）/ Motion（视频时序）/ Memory（长期历史）多流；6.9B base / 8B 完全版；16 步 flow-matching 动作头；43.7ms/step on RTX 5090。消融：**运动感知、长期记忆、物理传感流** 为对抗 VLA 失败模式的关键；灵巧操作优先而非仅桌面 pick-place。
-- **相关资料**：[PDF](https://arxiv.org/pdf/2605.03269) · [abs](https://arxiv.org/abs/2605.03269) · [Site](https://www.rlwrld.ai/en/rldx-1) · [GitHub Docs](https://github.com/RLWRLD/RLDX-1) · [HF](https://huggingface.co/RLWRLD/RLDX-1-PT) · [HF Collection](https://huggingface.co/collections/RLWRLD/rldx-1) · [alphaXiv](https://www.alphaxiv.org/audio/2605.03269)
+- **相关资料**：[PDF](https://arxiv.org/pdf/2605.03269) · [abs](https://arxiv.org/abs/2605.03269) · [Site](https://www.rlwrld.ai/en/rldx-1) · [GitHub](https://github.com/RLWRLD/RLDX-1) · [HF](https://huggingface.co/RLWRLD/RLDX-1-PT) · [HF Collection](https://huggingface.co/collections/RLWRLD/rldx-1) · [alphaXiv](https://www.alphaxiv.org/audio/2605.03269)
 - **数据规模**：ALLEX 人形（72K 合成 + 真机遥操作）+ FR3（DROID 92K + 真机）；多流触觉/力矩/记忆
 - **模型大小**：MSAT 灵巧手基础模型（VLM 顶 4 层可训）
 - **算力**：预训练 100K steps、global batch 8192；64× NVIDIA H200，约 195 小时
 - **世界模型用法**：策略为 MSAT 多流 VLA；**Motion 流**消费视频时序特征，**非** 预测未来帧的 WM/WAM。I2V 仅出现在**数据合成**管线（若使用）。**未使用** 世界模型/ WAM 作为策略核心。
+- **预训练简介**：三阶段训练流程。预训练阶段（Stage 1）基于 Qwen3-VL-8B 骨干，在 150 万条多机器人 embodiment 的操作数据上使用 flow matching 目标训练 100K 步（64×H200 GPU），学习通用跨 embodiment 操作能力；中训阶段（Stage 2）针对特定 embodiment 强化能力；后训阶段（Stage 3）面向具体任务微调。
 - **提及**：
 
 ## 2026-05-04 · MolmoAct2: Action Reasoning Models for Real-world Deployment
@@ -116,6 +120,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Molmo2-ER VLM + flow 动作专家（离散 token VLM 嫁接）
 - **算力**：Pretrain：64×H100，~5760 GPU·h；Finetune：64×H100 ~2304h；DROID：32×H100 ~1152h
 - **世界模型用法**：未使用。
+- **预训练简介**：多阶段预训练。首先在 330 万条 embodied reasoning 数据上训练 Molmo2-ER VLM；随后进行 VLA 预训练（200K 步），使用 FAST 离散动作 tokenizer 以自回归方式联合预测语言和动作；后训阶段（100K 步）加入 flow-matching 动作专家头，实现离散到连续动作的提升。
 - **提及**：
 
 ## 2026-05 · Learning While Deploying (LWD): Fleet-Scale Reinforcement Learning for Generalist Robot Policies
@@ -131,6 +136,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：基于 π 系 generalist policy（action chunk H=30）
 - **算力**：部署期 online RL（DIVL+QAM）；非固定离线预训练 GPU 表
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。LWD 是一个后训练框架，直接以预训练好的 π0.5 模型为基础，通过 offline-to-online 强化学习在部署过程中持续改进策略。
 - **提及**：√
 
 ## 2026-04-30 · PRTS: A Primitive Reasoning and Tasking System via Contrastive Representations
@@ -146,6 +152,23 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**PRTS-4B**（Qwen3-VL-4B-Instruct + flow-matching action expert）
 - **算力**：**64× H100，约 1 周**（CuTe-FlashAttention + sequence packing）
 - **世界模型用法**：未使用。
+- **预训练简介**：大规模预训练。基于 Qwen3-VL-4B-Instruct 骨干，在 167B tokens（4.04 亿样本）上使用行为克隆 + 对比强化学习（CRL）+ Robot QA + 子任务分解四种联合损失进行预训练，共 220K 步（64×H100 GPU）；后训阶段加入 flow-matching 动作专家进一步提升连续动作预测能力。
+- **提及**：
+
+## 2026-04-30 · Being-H0.7: A Latent World-Action Model from Egocentric Videos
+
+- **提出日期**：2026-04-30（arXiv 2605.00078；论文内日期 Apr 14, 2026）
+- **SOTA**：**LIBERO SOTA 99.2%**；**LIBERO-Plus T2 84.8%**（finetune 口径，仅次于 RLDX-1 86.7%）；**RoboTwin 2.0 T2 90.2% / 89.6%**（clean / hard，仅次于 Fast-WAM 91.83%）；**CALVIN T3 4.67**（ABCD→D）
+- **Benchmark**：RoboCasa-50 **62.1%**；GR1 **49.2%**；CALVIN ABC→D **4.48**；LIBERO-Plus zero-shot **82.1%**
+- **Other Benchmark**：三类真机平台（PND Adam-U / Unitree G1 / Franka FR3）12 个任务、5 个 ability suite 全部领先；Dynamic Scene / Physical Reasoning / Motion Reasoning / Long Horizon / Generalization 分别 **70.0 / 66.9 / 67.5 / 66.7 / 67.5%**；UAC 推理约 **3–4 ms/step**
+- **比 Pi0.5 好**：论文内对比：LIBERO **+2.3pp**（99.2 vs 96.9；若按本文 π0.5 97.7 基线则 +1.5pp）；LIBERO-Plus zero-shot **+4.7pp**（82.1 vs 77.4）；RoboCasa **+20.7pp**（62.1 vs 41.4）；CALVIN **+0.61**（4.67 vs 4.06）；RoboTwin2 hard **+12.8pp**（89.6 vs 76.8）
+- **简介**：BeingBeyond。提出 **latent world-action model**：在 perception 与 action 之间插入可学习 latent queries，通过训练期 posterior branch 的未来观测 embedding 对齐 prior branch，使策略在不生成未来帧的情况下获得 future-aware reasoning。消融/实践：真机动态、物理推理、长程、泛化任务全面领先；latent hidden states 可条件视频生成模型可视化未来状态，说明 latent 已捕获预测信息。
+- **相关资料**：[PDF](https://arxiv.org/pdf/2605.00078) · [abs](https://arxiv.org/abs/2605.00078) · [HTML](https://arxiv.org/html/2605.00078) · [Site](https://research.beingbeyond.com/being-h07)
+- **数据规模**：大规模 egocentric videos + UniHand 2.0 统一序列格式的 mixed human / robot manipulation trajectories；下游评测含 LIBERO、RoboCasa（24 base tasks，50 demos/task）、GR1（24 tasks，1000 demos/task）、LIBERO-Plus、RoboTwin2（50 clean demos/task + 500 randomized demos/task）、CALVIN；真机含 3 平台 12 任务，每任务每方法 20 次 blind trials
+- **模型大小**：**3B** latent WAM；基于 Being-H0.5 的 MoT 结构，InternVL3.5 understanding expert + Qwen3 action expert；V-JEPA2.1 视觉编码；RGB-only，H=4 observation horizon，T=20 action chunk，K=16 latent queries，对最后 L=9 Transformer layers 做 prior-posterior latent alignment
+- **算力**：论文未披露 GPU 型号、卡数或墙钟训练时长。后训练使用 sequence packing，global batch 约 **128 trajectory chunks**；UAC 部署约 **3–4 ms/step**，避免 test-time future generation 的额外 latency / memory
+- **世界模型用法**：**Latent World-Action Model**：不生成未来视频帧，而是在感知与动作之间插入 **K=16 latent queries**；训练时 posterior branch 用未来观测经冻结 ViT + Perceiver 得到 future embeddings，和可部署 prior branch 的 latent hidden states 做对齐（最后 9 层）+ norm/rank anti-collapse；推理时丢弃 posterior，**无 pixel rollout / no visual rollout**。实验验证：六个仿真 benchmark 综合平均排名最高；LIBERO **99.2%**、LIBERO-Plus* **84.8%**、RoboTwin2 Hard **89.6%**；真机 5 个 ability suite 全部领先，UAC 下仍在 **3–4ms/step**。**正面**（获得 WAM 的未来感知收益但保留直接 VLA 的推理效率）。
+- **预训练简介**：有大规模预训练阶段。按 UniHand 2.0 统一序列格式混合人类与机器人操作轨迹，优化 flow-matching action objective + prior/posterior latent alignment + anti-collapse regularization（`walign=1e-3`，`wnorm=wrank=1e-4`）；下游 post-training 只保留 action-generation objective 和 latent alignment，不再使用 anti-collapse regularizers。
 - **提及**：
 
 ## 2026-04-26 · STARRY: Spatio-Temporal Action-Centric World Modeling for Robotic Manipulation
@@ -161,6 +184,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：时空-动作联合扩散 + GASAM（具体骨干见论文）
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：**三阶段时空世界建模**：Stage1 预训练 **ST World Model**（Wan 视频扩散初始化）**+ Understanding Expert**（Qwen-VL 初始化）；Stage2 引入 **Action Expert + Geometry Expert**；Stage3 **时空-动作联合扩散** 与 GASAM 几何调制共训（分支独立扩散步）。消融（Table 4）：**联合预测未来 spatial-temporal latent + 动作** 是核心（Full ST+GASAM **93.30%** vs Action-Only **63.42%** on RoboTwin randomized）；真机 **70.8% vs π0.5 42.5%，+28.3pp**。**正面**。
+- **预训练简介**：三阶段训练流程。Stage 1 预训练阶段：基于 Wan 视频生成模型预训练时空世界模型（ST World Model），基于 Qwen-VL 预训练理解专家（Understanding Expert），使用大规模视频和多模态数据；Stage 2 引入动作专家和几何专家模块；Stage 3 通过 GASAM 机制联合微调所有模块实现协同优化。
 - **提及**：√
 
 ## 2026-04-23 · LoHo-Manip: Long-Horizon Manipulation via Trace-Conditioned VLA Planning
@@ -176,6 +200,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：trace-conditioned 分层 VLA 规划
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。任务管理器（Task Manager）初始化自预训练 VLM，执行器（Executor）初始化自预训练的 π0.5 checkpoint，两者均在下游任务上进行微调。
 - **提及**：
 
 ## 2026-04-22 · PokéVLA: Empowering Pocket-Sized VLA with Comprehensive World Knowledge Guidance
@@ -191,6 +216,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**1.22B**（Qwen2.5-0.5B VLM + DINO-SigLIP 双视觉编码器 + VLA-Adapter）小参数 VLA + 世界知识引导
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：未使用。
+- **预训练简介**：两阶段训练流程。Stage 1 预训练阶段：基于 Prismatic-VLM 架构（Qwen2.5-0.5B 语言模型），在 240 万条精心筛选的多模态 embodied 数据上预训练 PokeVLM，注入空间推理、物体识别和机器人操作等世界知识；Stage 2 后训阶段采用 OpenVLA-OFT 架构加入目标感知分割和几何对齐模块进行 VLA 微调。
 - **提及**：
 
 ## 2026-04-19 · VLA Foundry: A Unified Framework for Training VLAs
@@ -206,6 +232,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：框架论文（VLM→action expert 端到端）
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：未使用。
+- **预训练简介**：提出完整的从零训练流程（LLM→VLM→VLA）。LLM 阶段：1.2B 参数在 1T 文本 tokens 上预训练；VLM 阶段：加入 ViT 视觉编码器在 2 亿图文对上训练视觉-语言对齐；VLA 阶段：加入 flow transformer 动作头在机器人数据上训练。同时支持以 Qwen3-VL 等现成 VLM 为骨干的变体方案。
 - **提及**：√
 
 ## 2026-04-19 · Mask World Model (MWM): Predicting What Matters for Robust Robot Policy Learning
@@ -221,6 +248,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：28 层 DiT 2048 维（mask 预测）+ 28 层 action expert 512 维
 - **算力**：见论文 Table 6（Implementation Details）
 - **世界模型用法**：**视频 WM（mask 目标）**：用语义 **mask 潜变量** 替代 RGB 像素作 DiT 预测目标，两阶段（mask WM 预训练 + diffusion policy）。消融：相对 RGB WM 基线，RLBench 平均成功率 **68.3% vs 30.8%（约 +37.5pp）**；LIBERO **98.3%（+0.6pp vs π0.5）**；外观扰动鲁棒性显著更好。**正面**。
+- **预训练简介**：两阶段训练流程。第一阶段为掩码动力学预训练（Stage 1），使用 DiT 骨干网络通过 flow matching 在语义掩码空间学习动作条件化的世界模型（30k 步）；第二阶段为策略学习（Stage 2），冻结世界模型特征仅训练动作扩散头（18k 步）。视频 VAE 采用预训练模型，掩码动力学模型为从头训练。
 - **提及**：√
 
 ## 2026-04-16 · π0.7: A Steerable Generalist Robotic Foundation Model with Emergent Capabilities
@@ -236,6 +264,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：π0.7（MEM + 视觉子目标 + context CFG）
 - **算力**：真机长程优于 π0.5/π0.6；未跑 LIBERO
 - **世界模型用法**：**BAGEL-14B 图像世界模型独立生成 subgoal 图像**，作为条件输入给 VLA 策略（SuSIE 范式）；VLA 主干为 **Gemma3 4B** + 860M flow-matching action expert（总约 5B），VLA 使用 block-causal masking（非 block-bidirectional）。BAGEL WM 为独立模型，**非与 VLA 共训**。**非** Wan/Cosmos 视频 WAM，而是图像级目标预测。真机长程显著优于 π0.5/π0.6（论文 Fig.6/7/12）。**正面**（独立 WM 生成子目标条件化 VLA）。
+- **预训练简介**：在预训练 VLM Gemma3-4B 基础上新增 860M 参数动作专家模块（flow matching），构建约 5B 参数 VLA 模型。采用大规模统一训练：数据涵盖人类遥操作示教、自主回滚数据、人类视频及网络数据（约 26K+ 小时），训练信号包含动作预测与语言任务。同时独立训练 BAGEL-14B 世界模型用于数据筛选和评估。
 - **提及**：√
 
 ## 2026-04-16 · ReconVLA: An Uncertainty-Guided and Failure-Aware VLA Framework
@@ -251,6 +280,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Conformal prediction 不确定性框架
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。在冻结的预训练 VLA（π0、OpenVLA-OFT）上叠加共形分位数回归（CQR）不确定性量化模块和序列马氏距离（SMD）失败检测模块，不对 VLA 本身进行任何再训练。
 - **提及**：√
 
 ## 2026-04-15 · HAMLET: Switch your VLA into a History-Aware Policy
@@ -266,6 +296,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：在 π0 等上约 **2.72B–2.86B** 总参（+轻量记忆模块）
 - **算力**：训练 **4× / 2× A100**（见论文实验设置）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。提出可插拔的微调框架，在已有预训练 VLA（GR00T N1.5、CogACT）上添加时刻令牌（通过时间对比学习初始化）和轻量级记忆模块，仅微调新增组件，原 VLA 权重保持冻结或低秩适配。
 - **提及**：
 
 ## 2026-04-13 · StarVLA-α: Reducing Complexity in Vision-Language-Action Systems
@@ -281,6 +312,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Qwen3-VL-4B + MLP 动作头（Specialist / Generalist）
 - **算力**：最多 100k steps；LIBERO 8×A100，联合 64×A100（Table 8）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段，直接在预训练 VLM Qwen3-VL 上通过 MLP 动作头进行微调。论文实验性地探讨了动作专用预训练是否有益，结论为在其设定下预训练并不总是带来提升。
 - **提及**：
 
 ## 2026-04-10 · STRONG-VLA: Decoupled Robustness Learning for VLAs under Multimodal Perturbations
@@ -296,6 +328,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：可 plug-in OpenVLA-7B / OpenVLA-OFT / π0
 - **算力**：两阶段 LoRA / 全参微调（未统一 GPU 表）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。提出两阶段鲁棒性微调方法：阶段一在多模态扰动数据上进行课程驱动的鲁棒性训练，阶段二在干净数据上进行精炼微调。均为在已有预训练 VLA（OpenVLA/OFT/π0）基础上的微调。
 - **提及**：√
 
 ## 2026-04-09 · HiF-VLA: Hindsight, Insight and Foresight through Motion Representation
@@ -311,6 +344,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Prismatic-7B VLM backbone
 - **算力**：**8× A100**，global batch 64；LIBERO 150k / CALVIN 80k steps
 - **世界模型用法**：**运动空间前瞻预测（Foresight）**：预测未来运动向量（H.264 宏块位移），论文自称 "motion-centric world model"；辅助训练损失，推理时可选跳过。消融（Table 3）：Foresight 单独 **+1.2pp** SR（91.0→92.2%），叠加 Hindsight 达 93.2%；推理仅 1.13× 延迟。**正面**（轻量运动级 WM，非像素/视频生成）。
+- **预训练简介**：无独立预训练阶段。基于 OpenVLA 预训练权重（Prismatic-7B 骨干，在 OXE 数据集上预训练），新增回顾编码器和联合专家模块用于运动向量时序推理，在此基础上进行微调。
 - **提及**：
 
 ## 2026-04-07 · HY-Embodied-0.5: Embodied Foundation Models for Real-World Agents
@@ -326,6 +360,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：MoT-2B（4B 总参，2B 激活）+ MoE-A32B（407B 总参，32B 激活）
 - **算力**：32B→2B on-policy 蒸馏；GPU 细节见正文
 - **世界模型用法**：未使用。
+- **预训练简介**：大规模多阶段预训练。基于混元 MoT-1.8B 架构，预训练数据超 625B token，涵盖通用文本/图文数据及具身感知数据（6200 万检测、3600 万深度、500 万分割、1100 万指向等）。预训练后经历中间训练（mid-training，2500 万样本混合通用与具身任务）、后训练（SFT + GRPO 强化学习 + 迭代自进化 + 蒸馏），形成完整四阶段训练流水线。
 - **提及**：√
 
 ## 2026-04-06 · HiPolicy: Hierarchical Multi-Frequency Action Chunking for Policy Learning
@@ -341,6 +376,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：分层多频率 action chunk（plug-in policy）
 - **算力**：batch 128，AdamW（见 Table D.1）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。作为层级多频率动作分块策略学习方法，直接在任务演示数据上从头训练扩散策略，不涉及大规模预训练。
 - **提及**：√
 
 ## 2026-03-31 · From Human Skill to Robotic Mastery (Psi-R2 / Psi-W0 技术博客，灵初智能)
@@ -356,6 +392,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Psi-R2（Wan2.2 WAM）+ Psi-W0
 - **算力**：技术博客，无正式训练表
 - **世界模型用法**：**视频-动作联合 WAM（Psi-R2，Wan2.2-IT2V-5B-480P）** + **动作条件 WM（Psi-W0）**：R2 联合预测未来视频帧与动作；W0 **替代传统仿真器做 RL 微调**（rollout + RL 飞轮），兼策略评估与数据质检。核心创新：**95K+ h 人类数据 + 5.4K h 机器人数据**（首个万小时级预训练）；W0 集成**触觉模态**做预测目标（mask 训练策略）。推理优化至 **<100ms**（DiT 缓存 + 量化）。博客称 WM 闭环为长程精细任务关键；**无与 π0.5 同设定成功率表**。**正面**（工程叙事）。
+- **预训练简介**：大规模预训练。Psi-R2 基于视频生成模型 Wan2.2-IT2V-5B 初始化，在 5,417 小时机器人数据和 95,472 小时人类操作视频（共约 10 万小时，覆盖 294 场景、4,821 任务、1,382 物体）上进行联合预训练，同时预测未来视频帧和机器人动作。Psi-W0 为动作条件化世界模型，在相同骨干上训练，额外引入约 30% 失败数据以增强预测鲁棒性。
 - **提及**：
 
 ## 2026-03-30 · FocusVLA: Focused Visual Utilization for VLAs
@@ -371,6 +408,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Qwen2.5-0.5B VLM；可训练 **342.7M**（VLM 103.6M + Policy 239.1M）
 - **算力**：LIBERO：**4× A100** bs=64；RoboTwin：**8× A100** bs=64
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。基于 PrismaticVLM 和 Qwen2.5-0.5B 骨干，提出 Modality Cascaded Attention 和 Focus Attention 机制，直接在 LIBERO/RoboTwin 等下游任务上微调，论文明确说明「without any robotic pretraining」。
 - **提及**：
 
 ## 2026-03-26 · Beyond Textual Knowledge (BTK): Leveraging Multimodal Knowledge Bases for Enhancing VLN
@@ -386,6 +424,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：DUET + Qwen3-4B 短语抽取 + Flux 知识库
 - **算力**：知识库构建：A40（R2R 文本 120h；图像 60h×2 / 63h）；微调单卡 A40
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。VLN 框架以 DUET 为基线，利用现成预训练模型（Qwen3-4B、BLIP-2、CLIP、Flux-Schnell）作为工具构建多模态知识库，仅训练 Goal-Aware Augmentor 和 Knowledge Augmentor 模块。
 - **提及**：
 
 ## 2026-03-26 · VLA-OPD: Bridging Offline SFT and Online RL for VLAs via On-Policy Distillation
@@ -401,6 +440,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：可叠加 π0.5 / OFT checkpoint
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段，属于后训练/对齐方法。学生模型从 OpenVLA-OFT 初始化，通过在线策略蒸馏（On-Policy Distillation）从冻结教师模型学习，使用 Reverse-KL 目标函数。
 - **提及**：√
 
 ## 2026-03-24 · ELITE: Experiential Learning and Intent-Aware Transfer for Self-improving Embodied Agents
@@ -416,6 +456,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：基于 Qwen2.5-VL-72B 或 InternVL3-78B（推理+经验池）
 - **算力**：无大规模预训练算力（在线/监督设置）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段，甚至无任何梯度训练。基于冻结 VLM（Qwen2.5-VL-72B、InternVL3-78B）的纯提示框架，通过自反思知识构建和意图感知检索维护可演化的策略池，完全无参数更新。
 - **提及**：
 
 ## 2026-03-17 · P3Nav: End-to-End Perception, Prediction and Planning for VLN
@@ -431,6 +472,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：端到端 P3Nav（感知+预测+规划）
 - **算力**：预训练 200k iter，**4× RTX 4090** bs=12；微调 50k iter
 - **世界模型用法**：未使用。
+- **预训练简介**：有独立预训练阶段。在 BEV 感知-预测-规划框架上预训练 200k 迭代（batch 12，4×RTX4090）：前 5k 步仅训练感知模块，之后使用 MLM、SAP 及 OG 辅助任务与感知/预测损失联合优化。微调阶段 50k 迭代，冻结骨干和中间模块，仅训练序列动作预测。
 - **提及**：
 
 ## 2026-03-17 · GigaWorld-Policy: An Efficient Action-Centered World–Action Model
@@ -441,11 +483,12 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **Other Benchmark**：推理 9× 加速 vs Motus；success +7%；单次推理仅 0.36s；35% 任务成功率提升
 - **比 Pi0.5 好**：RoboTwin 2.0 远超 π0.5（**+95%** 相对提升）
 - **简介**：**因果 WAM**：动作预测 + action-conditioned 视频生成共训；causal mask 防 future-video token 影响 action token，使推理时可跳过显式视频生成。消融：**不强制每步生成视频** 仍保 SOTA 且更快；轻量 GigaWorld-0.5 backbone 是预训练核心。
-- **相关资料**：[PDF](https://arxiv.org/pdf/2603.17240) · [abs](https://arxiv.org/abs/2603.17240) · [HTML](https://arxiv.org/html/2603.17240) · [Site](https://gigaai-research.github.io/GigaWorld-Policy/) · [HF Paper](https://huggingface.co/papers/2603.17240)
+- **相关资料**：[PDF](https://arxiv.org/pdf/2603.17240) · [abs](https://arxiv.org/abs/2603.17240) · [HTML](https://arxiv.org/html/2603.17240) · [Site](https://gigaai-research.github.io/GigaWorld-Policy/) · [HF Paper](https://huggingface.co/papers/2603.17240)· [GitHub](https://github.com/open-gigaai/giga-world-policy)
 - **数据规模**：GigaWorld 预训练 + RoboTwin 评测
 - **模型大小**：**Wan 2.2 5B** diffusion Transformer 动作中心 WAM
 - **算力**：推理 latency 在 A100 上评测（见论文 Tab.3）
 - **世界模型用法**：**因果 WAM（Wan2.2-5B）**：动作预测与 **action-conditioned 视频 共训**；因果 mask 使推理可 **跳过显式视频生成**（Fast-WAM 类思路）。消融：不强制每步想象仍竞争力强；RoboTwin 均值 **0.86 vs π0.5 ~0.43（约 2× 提升）**；推理 **9× 加速**（360ms vs Motus 3231ms）。Motus 略高（0.87-0.89）但慢 9×。**正面**。
+- **预训练简介**：多阶段预训练。(1) 从 Wan2.2-5B 网络视频模型初始化；(2) 在约 10,000 小时机器人视频（Agibot、RDT、DROID、RoboMind、ATARA）和自我中心人类视频（EgoDex、EGO4D、Something-Something V2）上进行具身数据预训练，仅使用视频 flow-matching 目标，耗费 6000 GPU 小时，batch 256；(3) 后训练阶段在目标机器人数据上使用视频+动作联合 flow-matching。消融：从零训练 SR=0.45，仅视频初始化=0.57，仅具身预训练=0.73，两者结合=0.83。
 - **提及**：√
 
 ## 2026-03-16 · MolmoB0T: Large-Scale Simulation Enables Zero-Shot Manipulation
@@ -456,11 +499,12 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **Other Benchmark**：**真机 4 settings** Overall **79.2%**（vs π0.5 39.2%）；**DROID 仿真** 7 任务平均 **64.1%**（vs π0.5 10.0%）；MolmoBot-Data 1.7M 轨迹 / 94k+ 场景；MolmoBot-Engine 程序化数据生成
 - **比 Pi0.5 好**：真机 pick-place **+40pp**（≈2× π0.5）；纯仿真训练 **匹敌/超越** 大规模真机 VLA
 - **简介**：**纯仿真 MolmoBot-Engine**（MolmoSpaces 程序化生成 232K 环境，48K 可操作物体，8 任务类型）+ **Molmo2 VLM + flow 动作头**；含 MolmoBot-Pi0 / SPOC 变体；MolmoBot-DROID 仅需腕+外视摄像头。消融：3DGS / 高保真场景是 zero-shot Sim2Real 成功的主要因素。
-- **相关资料**：[PDF](https://arxiv.org/pdf/2603.16861) · [abs](https://arxiv.org/abs/2603.16861) · [Site](https://allenai.github.io/MolmoBot/) · [Code](https://github.com/allenai/MolmoBot) · [MolmoSpaces](https://github.com/allenai/molmospaces) · [HF Models](https://huggingface.co/collections/allenai/molmobot-models) · [HF Data](https://huggingface.co/datasets/allenai/MolmoBot-Data) · [Demo nb](https://github.com/allenai/MolmoBot/blob/main/MolmoBot/demo_policy.ipynb) · [Blog](https://allenai.org/blog/molmobot-robot-manipulation)
+- **相关资料**：[PDF](https://arxiv.org/pdf/2603.16861) · [abs](https://arxiv.org/abs/2603.16861) · [Site](https://allenai.github.io/MolmoBot/) · [GitHub](https://github.com/allenai/MolmoBot) · [MolmoSpaces](https://github.com/allenai/molmospaces) · [HF Models](https://huggingface.co/collections/allenai/molmobot-models) · [HF Data](https://huggingface.co/datasets/allenai/MolmoBot-Data) · [Demo nb](https://github.com/allenai/MolmoBot/blob/main/MolmoBot/demo_policy.ipynb) · [Blog](https://allenai.org/blog/molmobot-robot-manipulation)
 - **数据规模**：**MolmoBot-Data 1.7M 轨迹 / 94k+ 场景**（纯仿真）
 - **模型大小**：Molmo2 VLM + flow 头（MolmoBot-Pi0 / SPOC 变体）
 - **算力**：仿真数据引擎为主；无大规模真机预训练 GPU 公开表
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。基于 Molmo2-4B 预训练 VLM，冻结视觉编码器和投影器，在 1.7M 仿真 episode 上通过行为克隆训练动作头和 LLM 骨干（200k 步，batch 1024），属于直接在仿真数据上微调。
 - **提及**：√
 
 ## 2026-03-16 · Fast-WAM: Do World Action Models Need Test-time Future Imagination?
@@ -476,6 +520,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Wan2.2-5B + **1B action expert，总计 6B**
 - **算力**：训练细节见正文；推理 **单卡 RTX 5090D 32GB**
 - **世界模型用法**：**Wan2.2-5B 视频 DiT 作 world modeling backbone**，MoT 共享注意力 + 1B action expert；**训练时 video co-training**，推理 **移除 future video 分支**（不做 test-time imagination）。核心结论：**训练共训 > 测试时想象**；RoboTwin **91.8%**（无 embodied pretraining 最强，LingBot-VA 预训练版 92.2% 略高），推理 **190ms（RTX 5090D）、约 4× 加速** vs imagine-then-execute 变体。**正面**（共训有效、显式想象非必需）。
+- **预训练简介**：无独立具身预训练阶段。基于 Wan2.2-5B 视频 DiT 骨干（预训练于网络视频），论文明确声明「without embodied pretraining」，直接在任务数据上训练（LIBERO 20k 步，RoboTwin 30k 步），使用视频共训练+动作 flow-matching 联合目标。
 - **提及**：
 
 ## 2026-03-13 · SmoothVLA: Aligning VLAs with Physical Constraints via Intrinsic Smoothness Optimization
@@ -491,6 +536,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：OpenVLA + LoRA
 - **算力**：同硬件环境对比实验（未单独列 GPU 数）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段，属于后训练方法。基于 OpenVLA 骨干，先 SFT 再用 GRPO 进行强化学习微调，使用物理约束混合奖励（二值成功信号 + 基于 jerk 的平滑度惩罚），采用 LoRA 微调。
 - **提及**：√
 
 ## 2026-03-12 · Ψ0 (Psi-Zero): An Open Foundation Model Towards Universal Humanoid Loco-Manipulation
@@ -506,6 +552,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Qwen3-VL-2B + **~500M** MMDiT action expert
 - **算力**：预训练 **64×A100×10 天** bs=1024；后训练 **32×A100×30h** bs=2048
 - **世界模型用法**：人类视频阶段为 **next-action 自回归预训练**（论文定位为学习 "generalizable visual-action representations"），**非像素/视频生成 WM**，论文未使用 "world model" 或 "知识蒸馏" 术语；后训练为 ~500M flow MM-DiT action expert。消融：人类视频预训是数据效率关键；约 **829h EgoDex + 31h Humanoid Everyday** 较大数据 VLA **+40%** 相对提升（vs GR00T-N1.6）。**正面**（表征学习，非经典 WAM）。
+- **预训练简介**：多阶段预训练。阶段一：在 Qwen3-VL-2B-Instruct 基础上，用 EgoDex（~829 小时自我中心人类视频）和 Humanoid Everyday（31 小时）数据进行自回归下一动作 token 预测预训练（FAST 分词），64×A100 训练 10 天，230k 步，batch 1024。阶段二：冻结 VLM，在 Humanoid Everyday 上用 flow-matching 后训练 500M MM-DiT 动作专家，32×A100 训练 30 小时，30k 步。阶段三：逐任务微调动作专家（80 条演示，40k 步）。
 - **提及**：√
 
 ## 2026-03-11 · World2Act: Latent Action Post-Training via Skill-Compositional World Models
@@ -521,6 +568,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Cosmos-Predict2 等视频 WM 骨干（LoRA rank 8–128 / 2B full FT）
 - **算力**：WM 微调 **8× AMD MI210（48GB）**
 - **世界模型用法**：**Cosmos 技能组合 WM 作后训练骨干**：在 Cosmos-Predict2 上技能分解 + **contrastive 将 VLA 动作对齐 WM video-dynamics latent**（避免 RGB 幻觉）。消融：技能组合 WM > 单任务后训练；latent 对齐 > RGB 监督；LIBERO **98.1%（+1.1pp）**；真机 **+6.7%**；RoboCasa T2 **66.3%**。**正面**。
+- **预训练简介**：无独立预训练阶段，属于后训练框架。利用已有的预训练世界模型（Cosmos Tokenizer + video diffusion）和预训练 VLA（π0）作为基础，通过潜在动作对齐和残差策略后训练两阶段来改进 VLA 的动作输出。
 - **提及**：
 
 ## 2026-03-11 · FutureVLA: Joint Visuomotor Prediction for VLA
@@ -536,6 +584,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**4B** 级联合视觉-运动架构
 - **算力**：**4× A100**（见实验设置）
 - **世界模型用法**：**联合潜空间视觉-运动预测（非像素视频 WM）**：WAN 2.2 3D-VAE 编码视频 clip 为时序 token + Joint Visuomotor Gating（门控交叉注意力）；可 plug-in 多种 VLA（OFT/GR00T 风格）。视觉流重建首帧潜表征（静态锚点），非预测未来帧。消融：gating + 潜对齐后训练通用有效；LIBERO **98.3% vs π0 94.2%（+4.1pp）**（论文未比 π0.5）；SimplerEnv **+11.4%**；真机 **+21.7%**。**正面**（类动力学辅助，非 WAM 命名）。
+- **预训练简介**：有独立预训练阶段。提出联合视觉运动预训练（Joint Visuomotor Pretraining），在异构机器人操作数据集上同时进行视觉重建（masked image modeling）和动作预测，通过门控机制融合两种信号；预训练后再通过后训练对齐到下游 VLA（如 π0），使其获得未来视觉预测能力以提升操作性能。
 - **提及**：
 
 ## 2026-03-10 · TiPToP: A Modular Open-Vocabulary Planning System for Robotic Manipulation
@@ -551,6 +600,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：模块化 TAMP + VFM（非端到端单模型参数量）
 - **算力**：规划超时 30–60s；无统一训练 GPU
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段，也无任何训练过程。该系统是模块化 TAMP 框架，直接调用现成基础模型（VLM、open-vocabulary 检测器、分割模型等）进行零样本推理。
 - **提及**：
 
 ## 2026-03-10 · GST-VLA: Structured Gaussian Spatial Tokens for 3D Depth-Aware VLAs
@@ -566,6 +616,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**300M** flow-matching action expert + MoE FFN
 - **算力**：**8×A100-80GB**（Stage 1 训练）
 - **世界模型用法**：未使用。
+- **预训练简介**：有独立预训练阶段（Stage 1）。第一阶段用 80K 步预训练高斯空间标记器（GST）和动作专家模块，在深度数据集与机器人演示数据上学习 3D 空间表征和动作生成能力，同时冻结 VLM backbone；随后经过 Stage 2（LoRA 适配 + 深度感知思维链，40K 步）和 Stage 3（全参数微调，20K 步）完成训练。
 - **提及**：
 
 ## 2026-03-10 · NS-VLA: Towards Neuro-Symbolic VLAs
@@ -581,6 +632,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**2B**；Symbolic Encoder + Solver + GRPO
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。使用冻结的预训练 Qwen3-VL 作为视觉-语言 backbone，仅训练轻量级的符号分类器、动作生成器等模块，并通过在线强化学习（GRPO）进行策略优化。
 - **提及**：
 
 ## 2026-03-09 · SACA: Step-Aware Contrastive Alignment for VLN-CE
@@ -596,6 +648,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Video-LLM 初始化（如 LLaVA-Video-8B）+ SFT/RFT
 - **算力**：SFT **8× A6000 ~36h**；RFT **~24h/epoch**
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。直接在预训练的 LLaVA-Video-8B 上进行监督微调（SFT）和强化微调（RFT），核心创新在于步级对比对齐损失和基于进度的奖励函数。
 - **提及**：
 
 ## 2026-03-01 · EZ-M: Scaling Tasks, Not Samples - Mastering Humanoid Control through Multi-Task Model-Based RL
@@ -611,6 +664,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**16M** 参数 world model（vs BRC 1B）
 - **算力**：Medium 套件约 **10h×2×A40**（vs BRC 40h 单卡 A40）
 - **世界模型用法**：**模型-based RL 共享世界模型（16M）**：多任务 HumanoidBench 用 compact **dynamics/reward/value world model** + Gumbel search（非视频生成）。消融：Independent Experience Replay 关键；Hard 榜 **10/14 任务 SOTA**；样本效率优于 BRC 1B model-free baseline（BRC 非 WM）。**正面**（控制用 WM，非 WAM）。
+- **预训练简介**：无独立预训练阶段。基于 EfficientZero 的模型基强化学习框架，从头在线学习世界模型和策略（约 16M 参数），通过多任务扩展实现人形机器人控制，不依赖任何预训练模型。
 - **提及**：
 
 ## 2026-02-XX · WoVR: World Models as Reliable Simulators for Post-Training VLAs
@@ -621,12 +675,29 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **Other Benchmark**：真机 61.7% → 91.7%（+30.0pp）
 - **比 Pi0.5 好**：LIBERO 仍 **低于 π0.5 97.7%**（后训练起点不同）；**后训练增益** 对 π0.5 系具参考价值
 - **简介**：用 WM 当 **可靠 sim** 做 VLA 后训练：在 WM 仿真环境中 RL fine-tune VLA。消融：**WM 质量决定 post-train 上限**；低保真 WM 反而误导。
-- **相关资料**：[PDF](https://arxiv.org/pdf/2602.13977) · [abs](https://arxiv.org/abs/2602.13977)
+- **相关资料**：[PDF](https://arxiv.org/pdf/2602.13977) · [abs](https://arxiv.org/abs/2602.13977) · [GitHub](https://github.com/RLinf/RLinf)
 - **数据规模**：LIBERO / 真机后训练（WM 作 sim）
 - **模型大小**：WM 后训练 VLA（起点依赖 base checkpoint）
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：**WM 作可靠仿真器后训练 VLA**：在 WM 环境中 on-policy/RL 微调已有 VLA。消融：**WM 质量决定上限**，低保真 WM 反而误导。LIBERO **39.95%→69.2%（+29.3pp）**；真机 **61.7%→91.7%（+30.0pp）**。**正面**（后训练增益大，绝对 LIBERO 仍低于 π0.5 97.7%）。
+- **预训练简介**：无独立预训练阶段，属于后训练框架。将预训练的视频生成模型 Wan2.2-TI2V-5B 微调为世界模型模拟器，然后在想象的 rollout 中对已有 VLA 进行强化学习（GRPO）后训练。
 - **提及**：√
+
+## 2026-02-16 · DM0: An Embodied-Native Vision-Language-Action Model towards Physical AI
+
+- **提出日期**：2026-02-16（arXiv 2602.14974）
+- **SOTA**：**RoboChallenge Table30 Specialist SOTA 62.00%**（vs Spirit-v1.5 51.00、GigaBrain-0.1 51.67、π0.5 42.67）；**RoboChallenge Table30 Generalist SOTA 37.3% / 49.08 score**（vs π0.5 17.67% / 31.27，π0 9.0% / 20.22）
+- **Benchmark**：—
+- **Other Benchmark**：RoboChallenge 30 个长程 tabletop manipulation 任务，覆盖 UR5 / Franka / ARX5 / ALOHA；DM0 在 arrange fruits、move objects、open drawer、place shoes、put cup、stack bowls、turn on faucet 等多任务上达到 90–100% 成功率；mid-training checkpoint 还保留 embodied / general VQA、CoT subtask prediction 与 mobile-agent 潜力
+- **比 Pi0.5 好**：Specialist **+19.33pp**（62.00 vs 42.67）；Generalist success **+19.63pp**（37.3 vs 17.67），score **+17.81**（49.08 vs 31.27）
+- **简介**：Dexmal × StepFun。提出 **Embodied-Native VLA** 路线，区别于先互联网预训练再机器人微调：从预训练开始混入 web / 自动驾驶 / embodied 数据，后续 mid/post-training 联合训练文本、离散 action token 与 flow-matching 连续动作专家。核心机制：**hybrid gradient / Knowledge Insulation**（embodied 数据中 action expert 梯度不回传 VLM，非 embodied 数据继续更新 VLM）+ **Embodied Spatial Scaffolding**（subtask、goal bbox、EEF 2D trajectory、discrete action、progress 等 CoT 约束动作空间）。
+- **相关资料**：[PDF](https://arxiv.org/pdf/2602.14974) · [abs](https://arxiv.org/abs/2602.14974) · [HTML](https://arxiv.org/html/2602.14974) · [GitHub](https://github.com/Dexmal/dexbotic) · [HF Collection](https://huggingface.co/collections/Dexmal/dm0) · [RoboChallenge Inference](https://github.com/dexmal/Dexbotic-RoboChallengeInference)
+- **数据规模**：三阶段训练：预训练 **1.13T tokens**；mid-training **200M samples**；post-training **50M samples**。数据混合含 web/VL、自动驾驶、embodied grounding/QA、LIBERO 四套件、RoboTwin2.0 50 任务、Habitat 导航、自采 Franka/UR5/ARX-5/UMI、ALOHA，以及 OXE/Fuse/RoboMind/AgiBot Alpha/Galaxea Open World 等开源机器人数据；机器人数据为 episodic JSONL（多视角图像/视频帧、语言、proprioception、subtask、goal box、2D waypoint、action）
+- **模型大小**：**2B**；Qwen3-1.7B LLM/VLM backbone + Perception Encoder（728×728 多视角图像，4×下采样）+ flow-matching action expert；VLM 预测 embodied reasoning 文本与 255-bin 离散 action tokens，action expert 回归连续 action；action horizon **50** steps
+- **算力**：预训练 **370K steps / 1.2T tokens**，global batch **8192**，seq length 4096（未披露 GPU 型号/卡数）；mid-training **64× NVIDIA H20**、1 epoch、per-device batch 6、AMP；SFT Specialist **8×H20**、40K–150K iterations、batch 4/GPU；SFT Generalist **16×H20**、200K iterations、batch 4/GPU
+- **世界模型用法**：未使用。DM0 使用的是 embodied-native 三阶段 VLA 训练、flow-matching action expert、hybrid gradient / Knowledge Insulation 与 Spatial CoT/trajectory scaffolding；论文在 Future Work 中明确提出未来才计划集成 World Model 以 mentally simulate action consequences，因此当前模型没有 WM/WAM/视频生成模块。
+- **预训练简介**：有大规模预训练。Stage 1 在 web / document / OCR / grounding / VQA / GUI / driving / embodied QA 等混合语料上单阶段联合优化 VLM（1.2T tokens、370K steps），学习语义知识和 physical priors；Stage 2 mid-training 引入 cross-embodiment robot/action 数据，联合监督文本、离散 action token 与连续 action expert；Stage 3 post-training 缩小到目标 embodiment，保持相同模板与动作表征进行部署适配。
+- **提及**：
 
 ## 2026-02-XX · Xiaomi-Robotics-0: Open-Sourced VLA with Real-Time Execution
 
@@ -641,6 +712,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**4.7B**；Qwen3-VL-4B-Instruct VLM + 16 层 DiT action expert（MoT 架构）
 - **算力**：DeepSpeed ZeRO-2；GPU 型号论文正文未在摘要列出
 - **世界模型用法**：未使用。
+- **预训练简介**：有独立预训练阶段，分两步进行。Step 1：在 2 亿条机器人轨迹时间步和 8000 万条视觉-语言样本上联合训练 VLM，使其同时具备视觉语言理解和机器人状态感知能力；Step 2：冻结 VLM，从头训练 DiT 动作头，使用 flow matching 目标学习连续动作生成。预训练后再针对具体任务进行微调。
 - **提及**：
 
 ## 2026-02-XX · ABot-M0: VLA Foundation Model with Action Manifold Learning
@@ -656,6 +728,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Qwen3-VL-4B + **0.16B** DiT（AML）
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：未使用。
+- **预训练简介**：有大规模预训练阶段。在自建的 UniACT 数据集（超过 600 万条轨迹、9500+ 小时、20+ 种机器人形态）上进行预训练，核心创新为动作流形学习（Action Manifold Learning），通过 VQ-VAE 将异构动作空间统一映射到共享潜在流形，使 VLA 在预训练阶段学习跨形态的通用动作表征；预训练完成后再通过 SFT 阶段适配下游任务。
 - **提及**：
 
 ## 2026-02-XX · MINT: Mimic Intent, Not Just Trajectories (MINT-4B)
@@ -671,6 +744,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**MINT-4B**（PaliGemma-2.6B VLM + 300M action expert + 意图监督）
 - **算力**：**4× NVIDIA H200**
 - **世界模型用法**：未使用。
+- **预训练简介**：有预训练。先预训练 SDAT 动作分词器，采用多尺度频谱重建（VQ-VAE + DCT 频域建模）学习动作 token 化；然后基于预训练 VLM 骨干训练 MINT 策略。MINT-30M 从头训练全部组件，而 MINT-4B 利用 π0.5 预训练权重。动作分词器在 BridgeDataV2 等数据上独立预训练。
 - **提及**：
 
 ## 2026-02-XX · VLA-JEPA: Enhancing VLA with Latent World Model
@@ -681,11 +755,12 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **Other Benchmark**：JEPA 风格潜世界模型；预训练辅助损失
 - **比 Pi0.5 好**：LIBERO-Plus 较 π0 **+25.9pp**（79.5% vs 53.6%）
 - **简介**：**JEPA 式潜世界模型** 辅助 VLA 动作预测；不重建像素而预测 latent embedding。消融：**潜预测辅助损失** 提升 LIBERO-Plus 鲁棒性，对视角扰动尤为有效。
-- **相关资料**：[PDF](https://arxiv.org/pdf/2602.10098) · [abs](https://arxiv.org/abs/2602.10098)
+- **相关资料**：[PDF](https://arxiv.org/pdf/2602.10098) · [abs](https://arxiv.org/abs/2602.10098) · [GitHub](https://github.com/ginwind/VLA-JEPA)
 - **数据规模**：预训练 Something-Something-v2（220K 视频）+ DROID 76K；微调 LIBERO ~2K demo
 - **模型大小**：Qwen3-VL-2B backbone
 - **算力**：**8× A100**
 - **世界模型用法**：**JEPA 式潜世界模型辅助损失**：预训练阶段预测未来 **latent embedding**（冻结 V-JEPA2 编码器为目标，不重建像素），微调 VLA 动作头。消融：潜预测辅助损失提升 **LIBERO-Plus 至 79.5%**（π0 53.6%，**+25.9pp**）；相机扰动 63.3% vs π0 13.8%，机器人扰动 67.1% vs 6.0%。**正面**。
+- **预训练简介**：有独立 JEPA 式预训练阶段。使用 Something-Something-v2（22 万人类视频）和 DROID（7.6 万机器人演示）数据，通过潜在世界建模（JEPA 对齐损失）联合流匹配动作预测进行预训练。预训练组件包括 Qwen3-VL 骨干（可训练）和 V-JEPA2 编码器（冻结），形成两阶段流水线：先预训练世界模型能力，再下游微调。
 - **提及**：
 
 ## 2026-02-XX · DreamZero: World Action Models are Zero-Shot Policies
@@ -701,6 +776,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**14B**（Wan2.1-I2V-14B + video-action flow）
 - **算力**：匹配 batch/steps；推理 **H100/GB200** 优化至 38×（Flash）
 - **世界模型用法**：**Wan2.1-I2V-14B WAM**：**联合预测 video + action** flow；可零样本作策略。消融：联合 vs 分离未做数值 ablation（仅设计论证）；DreamZero-Flash（KV 替换、1-step、CFG 并行）**38× 推理加速**；AgiBot G1 seen **62.2% vs best pretrained VLA 27.4%（>2×）**。**正面**。
+- **预训练简介**：基于 Wan2.1-I2V-14B 预训练视频扩散骨干构建 14B 参数 WAM，在约 500 小时 AgiBot G1 数据或 DROID 数据上训练 10 万步，采用联合视频+动作流匹配目标。训练时冻结文本/图像编码器和 VAE，更新 DiT 块和动作组件。
 - **提及**：√
 
 ## 2026-02-XX · World-VLA-Loop: Closed-Loop World Models for VLAs
@@ -716,6 +792,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Cosmos Predict 2 WM + VLA 闭环
 - **算力**：WM 生成 24 帧约 **7s/批（H100）**；GRPO ~50 步收敛
 - **世界模型用法**：**VLA↔WM 闭环共进化**（Cosmos Predict2 WM）：动作 rollout 经 WM 反推，**失败/近成功轨迹回流训 WM**（SANS 数据集）。消融（Table 4）：近成功回流数据是关键（移除降 25-30pp）；真机 2 轮迭代 **13.3%→36.7%→50.0%（总 +36.7pp）**。**正面**。
+- **预训练简介**：无独立 VLA 预训练阶段。直接使用 OpenVLA-OFT 作为基础 VLA，世界模型基于 Cosmos-Predict2 在 ManiSkill SANS 数据集上训练。论文核心贡献是闭环 RL 后训练框架，属于后训练/强化微调范畴。
 - **提及**：√
 
 ## 2026-02-XX · VLAW: Vision-Language-Action World Model
@@ -731,6 +808,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：迭代 WM+VLA 联合
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：**迭代共改进 WM+VLA**（Ctrl-World action-conditioned WM + π0.5 VLA）：迭代循环（收集真实 rollout → 微调 WM → 生成合成数据 → 训练 VLA），合成+真实混合。消融：混合数据（真实+合成）> 仅真实（Filtered BC）；WM 加入在线 rollout 数据显著降低误判（FP: 11→1）；绝对成功率 **+39.2%** vs base，合成数据贡献 **+11.6%** vs Filtered BC。**正面**。
+- **预训练简介**：无独立预训练阶段。直接使用 π0.5 作为基础 VLA、Ctrl-World 作为基础世界模型，通过真实世界 rollout 与世界模型合成数据的迭代改进进行后训练。
 - **提及**：√
 
 ## 2026-02-XX · VLANeXt: Recipes for Building Strong VLA Models
@@ -746,6 +824,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**2.5B** + 12 条 recipe
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：recipe 消融曾验证 **预测未来观测有益**，但训练时间 **≈3×**，**最终模型明确排除 world modeling**（采用 Qwen3-VL + 轻量 policy head）。属于 **负向设计决策**（成本-收益）；LIBERO-Long **94.6% Top2** 在无 WM 下达成。**未在终稿使用 WM**。
+- **预训练简介**：无独立预训练阶段。主要贡献是系统性的 VLA 设计空间探索（动作空间、tokenization、注意力机制等设计选择），使用预训练 Qwen3-VL 骨干，在 DROID 上预训练 10 万步再微调属于标准流程复现。
 - **提及**：√
 
 ## 2026-02-XX · SimVLA: A Simple VLA Baseline
@@ -761,6 +840,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**0.5B** 极简 VLA
 - **算力**：训练 **9.3GB VRAM**
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。使用 SmolVLM-0.5B 或 Florence-2 等现成预训练 VLM 骨干，在仿真基准或真实世界数据上直接微调，核心贡献是标准化的 VLA 训练 recipe 和公平评估基准。
 - **提及**：
 
 ## 2026-02-XX · Green-VLA: 5-Stage Curriculum to Strong VLA
@@ -776,6 +856,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：VLM→RL 五阶段路线
 - **算力**：后期 RL 必要（未列 GPU 数）
 - **世界模型用法**：未使用。
+- **预训练简介**：完整 5 阶段课程式预训练。L0（基座 VLM，Qwen3-VL-4B）、L1（2400 万网络多模态样本增强物理世界理解）、R0（1.84 亿机器人样本 / 3000+ 小时多体预训练，64×H100 训练 10^5 步，统一动作空间覆盖人形/机械臂等多种机器人形态）、R1（特定体型 SFT 微调）、R2（基于 IQL 的 RL 对齐）。L1 和 R0 是该论文核心预训练贡献。
 - **提及**：√
 
 ## 2026-02-XX · GeneralVLA: 3D Affordance + Control Strategy
@@ -791,6 +872,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：3D affordance + 控制策略
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。采用层次化框架组合现成模型（VLM + SAM + LLM），其中可供性分割模块（ASM）使用 LoRA 在混合数据上微调，核心贡献是零样本轨迹规划框架。
 - **提及**：√
 
 ## 2026-02-XX · LifeLong-RFT: Lifelong Reinforcement Fine-Tuning
@@ -806,6 +888,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：NORA-Long base（Fast+ tokenizer）
 - **算力**：**8× NVIDIA H20**
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。直接使用 NORA-Long 作为预训练基础 VLA，核心贡献是提出多维过程奖励的强化微调方法，通过 GRPO 实现持续学习，属于后训练/强化微调范畴。
 - **提及**：√
 
 ## 2026-02-XX · QuantVLA: Post-Training Quantization for VLA
@@ -821,6 +904,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：W4A8 量化 π0.5 / GR00T N1.5
 - **算力**：实验在 **NVIDIA A100**
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。提出免训练的后训练量化（PTQ）框架，针对已有 VLA 模型进行权重和激活的量化压缩，不涉及任何预训练或微调过程。
 - **提及**：√
 
 ## 2026-01-XX · CycleVLA: Backtracking + MBR Decoding for VLA
@@ -836,6 +920,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：OpenVLA + diffusion action expert
 - **算力**：训练 **4× A100 40GB**；评测 **1× A10**
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。在已有的 OpenVLA 基础上进行微调，扩展动作维度以支持双臂操作，核心贡献在于推理阶段的回溯机制和 MBR 解码策略。
 - **提及**：√
 
 ## 2026-02-XX · LAP: Language-Action Pre-Training Enables Zero-shot Cross-Embodiment Transfer
@@ -851,6 +936,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**LAP-3B**（PaliGemma-3B）
 - **算力**：**64× TPU v6e**，15k steps，约 **10 小时**
 - **世界模型用法**：未使用。
+- **预训练简介**：有独立预训练阶段。基于 PaliGemma-3B 视觉语言骨干，在 OXE（约 100 万条机器人轨迹）和 MolmoAct 数据上进行语言-动作联合预训练，将动作离散化为语言 token 与连续动作专家（flow matching）并行训练，使用交叉熵损失和流匹配损失，在 64×TPU v6e 上训练 15k 步。预训练后通过统一的语言-动作表征实现零样本跨具身迁移。
 - **提及**：
 
 ## 2026-01-XX · Cosmos Policy (NVIDIA)
@@ -866,6 +952,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Cosmos Predict2 **2B** 全参微调
 - **算力**：40K/45K/50K steps：**64/32/8× H100** 各 **48h**
 - **世界模型用法**：**Cosmos-Predict2-2B 视频基础模型作策略初始化**：单阶段后训练，在潜扩散中联合 **action / future state / value**；非从零 VLA。消融（Table 4，LIBERO）：**WM 预训练初始化** 关键，从零训降 3.9pp（98.5→94.6%），真机 ALOHA 降 18.7pp；LIBERO **98.5%（+1.1pp vs CogVLA 97.4%）**；RoboCasa **67.1% SOTA（+4.6pp vs π0，仅需 50 demos vs π0 300）**。**正面**。
+- **预训练简介**：无独立预训练阶段（本文自身不做预训练）。直接在 NVIDIA Cosmos-Predict2-2B 视频生成基础模型上进行单阶段微调，使用机器人演示数据训练策略模型，利用视频模型已有的世界知识。Cosmos-Predict2 本身的视频预训练由 NVIDIA 独立完成。
 - **提及**：√
 
 ## 2026-01-XX · Pose-VLA: Universal Pose Pretraining for Generalizable VLAs
@@ -881,6 +968,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：VLM + 姿态预训练阶段
 - **算力**：各阶段 **16× H20×2 天**
 - **世界模型用法**：未使用。
+- **预训练简介**：有独立两阶段预训练。第一阶段为空间定位预训练（Spatial Grounding Pre-training），在 140 万张图像和 650 万个 3D 标注上训练 Pose Tokenizer，学习将 3D 位姿编码为离散 pose token；第二阶段为轨迹对齐预训练（Trajectory Alignment Pre-training），在 155 万条机器人轨迹上将 pose token 与动作轨迹对齐，使用 PaliGemma-2 作为 VLM 骨干。预训练赋予模型通用的 3D 空间理解能力，下游仅需少量数据微调即可泛化。
 - **提及**：
 
 ## 2026-01-XX · Being-H0.5
@@ -896,6 +984,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：Being-H0.5-2B（MoF）
 - **算力**：预训练约 **1000 GPU·hour**（recipe 将公开）
 - **世界模型用法**：未使用。
+- **预训练简介**：有大规模预训练阶段。基于 InternVL-3.5 视觉语言骨干，采用 Mixture-of-Transformers（MoT）架构和 Mixture-of-Flow 动作头，在 UniHand-2.0 数据集上进行预训练，该数据集包含来自 30 种具身、超过 3.5 万小时的操作数据。设计统一动作空间（Unified Action Space）将不同具身的动作映射到统一表征，预训练使用 flow matching 损失，支持跨具身泛化和少样本迁移。
 - **提及**：√
 
 ## 2026-01-XX · LingBot-VLA / A Pragmatic VLA Foundation Model
@@ -911,6 +1000,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**3B**（Qwen2.5-VL + MoT action expert）
 - **算力**：**256 GPU** 规模预训练（论文叙事）
 - **世界模型用法**：未使用。本文 LingBot-VLA 为纯 VLA 架构（Qwen2.5-VL + MoT action expert + Flow Matching），无 WM 组件。数据 scale 3k→20k 小时近乎单调涨（Fig 5），但属数据规模消融，非 WM 相关。配套 LingBot-Depth 提供深度感知（非 WM）。注："LingBot-VA" 为另一独立模型/论文，非本文内容。
+- **预训练简介**：有独立预训练阶段。以 Qwen2.5-VL-3B 为视觉语言骨干，结合流匹配动作专家（Flow Matching Action Expert），在来自 9 种双臂机器人平台、约 2 万小时真实世界操作数据上进行大规模预训练，覆盖 100+ 技能和 1000+ 物体。训练目标包括流匹配动作生成损失和深度蒸馏辅助损失，预训练后模型具备跨平台跨任务的泛化能力。
 - **提及**：√
 
 ## 2026-01-XX · SOP: Scalable Online Post-Training
@@ -926,6 +1016,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：π θ0 基座 + RECAP 后训练
 - **算力**：**8× H100** 云端 learner
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。提出可扩展的在线后训练（post-training）系统，以 π0.5 等已有 VLA 模型为起点，通过在线强化学习（奖励加权回归）在真实环境中持续优化策略，核心贡献在于后训练框架。
 - **提及**：√
 
 ## 2026-01-XX · TT-VLA: Test-Time RL with Task-Progress Reward
@@ -941,6 +1032,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：LoRA rank {16,32} 于 VLA
 - **算力**：—（论文/本地材料未明确给出）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。提出测试时自适应框架，利用任务进度奖励在推理阶段对已有 VLA 模型进行在线强化学习微调，核心贡献在于测试时适应机制。
 - **提及**：√
 
 ## 2026-01-XX · Genie Sim 3.0（智元 / AgiBot）
@@ -956,6 +1048,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：LLM 驱动 sim + VLM 评测平台
 - **算力**：sim-real 一致性评测（非单一模型训练表）
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。本文是仿真平台与数据生成系统，提供高保真仿真环境、大规模任务生成和 sim-to-real 迁移工具链，本身不训练 VLA 模型。
 - **提及**：√
 
 ## 2026-01-XX · Helix 02（Figure AI 技术报告 / Blog）
@@ -971,6 +1064,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：S0/S1/S2 三层控制栈
 - **算力**：技术博客
 - **世界模型用法**：未使用。
+- **预训练简介**：分层训练。System 0 是 10M 参数全身运动控制基础模型，使用超过 1000 小时人体运动数据在 200,000+ 并行仿真环境中通过 sim-to-real 强化学习从头训练；System 1 是 transformer 视觉运动策略（条件于 S2 的 latent）；System 2 是语义推理层。博客未详细说明 S1/S2 的预训练细节。
 - **提及**：√
 
 ## 2025-12-XX · GR00T N1.6（NVIDIA）
@@ -986,6 +1080,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：开源 **`GR00T-N1.6-3B`**。骨干 **Cosmos-2B / Cosmos-Reason-2B** VLM（原生宽高比图像编码）；**32 层 DiT** diffusion transformer（N1.5 为 16 层，约 2×）；去掉 N1.5 的 4 层 post-VLM adapter，预训练 **解冻 VLM 顶 4 层**；默认 **state-relative action chunk**（相对动作空间，非绝对关节/EEF）。结合 **Cosmos Reason** 世界模型做 VLA 推理与任务分解。
 - **算力**：两篇 HTML 博客 **未给出 GPU 型号、卡数或墙钟训练时长**。GEAR 博客披露训练配方：**预训练 300K steps、global batch size 16,384**；下游机器人实验 **post-train 通常 10K–30K steps、global batch size ≤1K**。整机栈还包含 Isaac Lab **全身 RL**（GR00T-WholeBodyControl）与 COMPASS **大规模合成导航** 微调（各自算力未单独列表）。
 - **世界模型用法**：**Cosmos-Reason-2B VLM 变体作骨干**（博客称为 world model，用于任务分解/规划），**32 层 DiT** 动作头（N1.5 为 16 层，约 2×），配合 Isaac Lab 全身 RL 与 COMPASS 导航。技术文档显示 **state-relative action 优于 absolute**。无量化消融对比 Cosmos-Reason vs 其他 VLM backbone（博客无正式 ablation 表）。**正面**（推理/planning 用 WM，非视频-动作联合训练主路径）。
+- **预训练简介**：有独立大规模预训练阶段。使用 NVIDIA Cosmos-2B VLM 变体作为视觉语言骨干（解冻顶部 4 层），配合 32 层 DiT 动作头。预训练数据包含数千小时遥操作数据，来自 YAM 双臂、AGIBot Genie1、仿真 Galaxea R1 Pro（BEHAVIOR 套件）及 Unitree G1 全身操控等多个机器人平台。预训练共 300K 步，全局 batch size 16384。下游任务再用小规模特定数据集进行 10K–30K 步 post-training。
 - **提及**：√
 
 ## 2025-12-XX · OXE-AugE: Augmenting OXE with Embodiment Aug
@@ -1001,6 +1096,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：扩散策略 ResNet18 + 1D CNN；OpenVLA/π0 微调
 - **算力**：仿真 250k steps；真机微调 20–25k steps（未统一 GPU 表）
 - **世界模型用法**：策略主干**未使用** WM/WAM。数据管线用 **仿真渲染 + 视频修复** 做 embodiment 增广（SAM2 分割源机器人 → E2FGVI 修复背景 → MuJoCo 渲染目标机器人合成），**非视频生成模型**（论文对比扩散增广 RoVi-Aug 反降 27-30%）。OXE→4.4M 轨迹；真机未见 robot×gripper **+24%~+45%**。**正面**（仅数据侧仿真增广，非 WM/视频生成）。
+- **预训练简介**：无独立预训练阶段。本文提出 AugE-Toolkit 数据增强管线和 OXE-AugE 数据集（440 万+ 轨迹），在已预训练的 OpenVLA 和 π0 基础模型上进行微调，论文本身不训练新的基础模型。
 - **提及**：√
 
 ## 2025-11-XX · π*0.6 / Recap
@@ -1016,6 +1112,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：π0.6 + Recap（openpi）
 - **算力**：offline + on-robot RL（Physical Intelligence 系）
 - **世界模型用法**：未使用。
+- **预训练简介**：有独立大规模预训练阶段。基于 Gemma3-4B VLM 骨干 + 860M 参数 flow matching 动作专家，在数万小时多任务多机器人演示数据集上预训练。预训练分两步：(1) 先在全部预训练数据上训练分布式价值函数（预测成功步数）；(2) 再用 advantage conditioning 的离线 RL 方式端到端预训练 VLA（结合 flow matching 损失和 next-token prediction）。预训练后通过 SFT 微调到目标任务，再进行 RECAP 迭代改进。
 - **提及**：√
 
 ## 2025-10-XX · X-VLA: Soft-Prompt Cross-Embodiment VLA
@@ -1031,6 +1128,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：X-VLA-0.9B（Florence-Large VLM + 24 层 Transformer + soft-prompt）
 - **算力**：预实验 **8× A100**，bs=256，200K iter
 - **世界模型用法**：未使用。
+- **预训练简介**：有独立预训练阶段（Phase I）。X-VLA-0.9B 在 290K 高质量 episodes 的异构数据混合上预训练，数据来自 AGIBOT-beta、Droid、RoboMind，涵盖 5 种机械臂的 7 个硬件配置。使用 Florence-Large 作为视觉语言编码器（LoRA 微调），通过 Soft Prompt（为每个数据源分配可学习嵌入）和 flow matching 目标联合优化骨干和提示。
 - **提及**：√
 
 ## 2025-10-XX · CoLA-World: Co-evolution of Latent Action + World Model
@@ -1046,6 +1144,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：IDM 0.12B + OpenSora ~0.93B 可学习
 - **算力**：2-stage LAM30K+WM30K = 60K steps；联合 Warm8K+E2E52K = 60K steps（论文 Tables 1-4，无 Table 8）
 - **世界模型用法**：**LAM + 视频 WM 共进化**：**OpenSora v1.2（~1.2B）** 预训练视频 WM + 从零 LAM（IDM + VQ 量化器）；**warm-up 8K 步后端到端联合训练**（无 warm-up 直接联合导致码本坍塌，Fig 2-3）。消融：**warm-up 必需**；**共进化（evolving WM+LAM）> 冻结组件**（Fig 4）；CoLA-World（Warm8K+E2E52K）> 2-stage（LAM30K+WM30K），总步数均 60K。**正面**（表征共进化）。
+- **预训练简介**：无独立的机器人策略预训练阶段。使用预训练的 OpenSora（1.2B 参数视频生成模型）作为世界模型骨干，在 OXE + AgiBot + 人类自我中心视频的混合数据集上，通过 warm-up（冻结世界模型仅训练 IDM）+ 端到端联合训练（IDM 与世界模型协同进化）的方式学习 latent action 控制的世界模型。
 - **提及**：√
 
 ## 2025-09-XX · FLOWER: Efficient VLA Flow Policy
@@ -1061,6 +1160,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：**950M** flow policy
 - **算力**：预训练 **200 H100·h**（4×H100×48h）；对比 OpenVLA 21500h
 - **世界模型用法**：未使用。
+- **预训练简介**：有独立预训练阶段。FLOWER（947M 参数）使用 Florence-2-L VLM 的编码器半部分 + 18 层 Flow Transformer。在约 250K 轨迹的 OXE-soup（8 个公开数据集，含 BridgeV2、Google Robot、Droid 等）上预训练 350K 步，仅用 4×H100 训练 48 小时（约 200 GPU 小时）。使用 flow matching 目标。预训练后在下游任务上微调适应。
 - **提及**：√
 
 ## 2025-09-XX · RealMirror: Comprehensive Open-Source VLA Platform for Embodied AI
@@ -1076,6 +1176,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 - **模型大小**：平台+benchmark（SmolVLA 等对比）
 - **算力**：VR+Isaac Sim 管线
 - **世界模型用法**：未使用。
+- **预训练简介**：无独立预训练阶段。RealMirror 是面向人形机器人 VLA 研究的开源平台/基准，集成数据采集、训练、推理和 Sim2Real 转移，支持 ACT、Diffusion Policy、SmolVLA 等已有 VLA 模型的训练和评估，本身不提出新的预训练方法。
 - **提及**：√
 
 ---
@@ -1086,13 +1187,13 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 
 | Benchmark | SOTA (#1) | Top2 | Top3 | 备注 |
 |-----------|-----------|------|------|------|
-| **LIBERO** | StarVLA-α **98.8%** | Xiaomi-Robotics-0 **98.7%** | ABot-M0 **98.6%** | 全为 2026 |
-| **LIBERO-Plus** | RLDX-1 **86.7%** | OA-WAM **83.9%** | PokéVLA **83.5%** | 全为 2026；π0 仅 56.1% |
+| **LIBERO** | Being-H0.7 **99.2%** | StarVLA-α **98.8%** | Xiaomi-Robotics-0 **98.7%** | 全为 2026 |
+| **LIBERO-Plus** | RLDX-1 **86.7%** | Being-H0.7 **84.8%** | OA-WAM **83.9%** | 全为 2026；π0 仅 56.1% |
 | **LIBERO-Pro** | GLaD **59.47%**（2025） | π0.5（评测条目）**62%\*** | PRTS **58.8%** | \*评测论文条目，非模型本体 |
 | **SimplerEnv** | Octo+PLD **96.63%**（2025） | FASTerVLA **87.9%** | — | X-VLA 报 Simpler-WidowX 95.8% / VM 80.4% / VA 75.7%（无单一聚合分）；2026 最高 GST-VLA 80.2% |
-| **RoboTwin 2.0** | Fast-WAM **91.83%** | StarVLA-α **88.3%** | RLDX-1 **87.8%** | Top3 全为 2026 / π 系 2026 |
+| **RoboTwin 2.0** | Fast-WAM **91.83%** | Being-H0.7 **90.2% / 89.6%** | StarVLA-α **88.3%** | Top3 全为 2026 / π 系 2026 |
 | **RoboCasa** | Cosmos Policy **67.1%** | HAMLET **66.4%**（300 demos） | World2Act **66.3%** | Top3 全为 2026 |
-| **CALVIN** | Xiaomi-Robotics-0 **4.75** | NS-VLA **4.72** | UD-VLA + Fast-dVLA **4.54** | Top3 含多个 2026 |
+| **CALVIN** | Xiaomi-Robotics-0 **4.75** | NS-VLA **4.72** | Being-H0.7 **4.67** | Top3 含多个 2026 |
 | **ManiSkill2** | ConsisVLA-4D **94.3%** | — | — | 2026 SOTA |
 | **RoboCasa365** | RLDX-1 **32.1%** | π0 **14.8%** | — | 明显领先 π0 |
 | **MolmoSpace / MolmoBot / RoboEval** | MolmoAct2 / MolmoBot 系 | — | — | 2026 新榜 |
@@ -1102,6 +1203,7 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 | **REVERIE** | P3Nav SR 60.06 / RGS 39.75 | BTK | — | VLN 路线 |
 | **RxR-CE** | SACA SR 60.3 | P3Nav | — | VLN 路线 |
 | **RealMirror Humanoid** | SmolVLA **79.75%** | Diffusion Policy 75.15% | ACT 73.55% | 2025/ICRA2026 平台 |
+| **RoboChallenge Table30** | DM0 Specialist **62.00%** / Generalist **37.3%** | Spirit-v1.5 51.00% | GigaBrain-0.1 51.67% | 真机长程 Table30；Generalist 对比 π0.5 17.67% |
 | **DROID 真机（自建对照）** | TiPToP **59.4%** / MolmoBot **79.2%** | — | — | vs π0.5-DROID 33.3% / 39.2% |
 | **AgiBot G1（DreamZero 对比）** | DreamZero seen 62.2% / unseen 39.5% | best pretrained VLA 27.4% | — | DreamZero 自报 |
 
@@ -1111,28 +1213,28 @@ survey（vla_sota_ls_2.md）采用的 π0.5 LIBERO 基准是 97.7%（来自 Alle
 
 ## 附录 B · 论文统计
 
-- 主索引共 **68 篇 unique 论文**（去重：源文件第 35 行 `Cosmos Policy + World2Act` 与第 30 行 World2Act 合并、与第 40 行 Cosmos Policy 合并）。
+- 主索引共 **70 篇 unique 论文**（去重：源文件第 35 行 `Cosmos Policy + World2Act` 与第 30 行 World2Act 合并、与第 40 行 Cosmos Policy 合并；另补 Being-H0.7 / DM0）。
 - 「提及」列 √ 共 **38 篇**（覆盖：源文件第 19、26（待考量）、35、40、50（部分）、52–58 子表头、104–139 补漏节、147–152 用户追加节中显式 √ 的条目）。
 - 时间分布：
   - 2026-05：5 篇（OA-WAM / ConsisVLA-4D / RLDX-1 / MolmoAct2 / LWD）
-  - 2026-04：14 篇（PRTS / STARRY / LoHo-Manip / PokéVLA / VLA Foundry / MWM / π0.7 / ReconVLA / HAMLET / StarVLA-α / STRONG-VLA / HiF-VLA / HY-Embodied-0.5 / HiPolicy）
+  - 2026-04：15 篇（PRTS / Being-H0.7 / STARRY / LoHo-Manip / PokéVLA / VLA Foundry / MWM / π0.7 / ReconVLA / HAMLET / StarVLA-α / STRONG-VLA / HiF-VLA / HY-Embodied-0.5 / HiPolicy）
   - 2026-03：18 篇（Psi-R2 博客 / FocusVLA / BTK / VLA-OPD / ELITE / P3Nav / GigaWorld-Policy / MolmoB0T / Fast-WAM / SmoothVLA / Ψ0 / World2Act / FutureVLA / TiPToP / GST-VLA / NS-VLA / SACA / EZ-M）
-  - 2026-02：15 篇（WoVR / Xiaomi-Robotics-0 / ABot-M0 / MINT / VLA-JEPA / DreamZero / World-VLA-Loop / VLAW / VLANeXt / SimVLA / Green-VLA / GeneralVLA / LifeLong-RFT / QuantVLA / LAP）
+  - 2026-02：16 篇（WoVR / DM0 / Xiaomi-Robotics-0 / ABot-M0 / MINT / VLA-JEPA / DreamZero / World-VLA-Loop / VLAW / VLANeXt / SimVLA / Green-VLA / GeneralVLA / LifeLong-RFT / QuantVLA / LAP）
   - 2026-01：9 篇（Cosmos Policy / Pose-VLA / Being-H0.5 / LingBot-VLA / SOP / TT-VLA / Genie Sim 3.0 / Helix 02 / CycleVLA）
   - 2025-12：2 篇（GR00T N1.6 / OXE-AugE）
   - 2025-11：1 篇（π*0.6 / Recap）
   - 2025-10：2 篇（X-VLA / CoLA-World）
   - 2025-09：2 篇（FLOWER / RealMirror）
-- 合计 **68 篇**。
+- 合计 **70 篇**。
 
 ---
 
 ## 附录 C · 来源与口径说明（与 [vla_sota_ls.md](vla_sota_ls.md) 同口径）
 
-1. **数据来源**：RLDX-1 论文链接 **arXiv:2605.03269**；π0.5 LIBERO **97.7%** 来自 [vla-eval harness](https://arxiv.org/abs/2603.13966) 复现。
+1. **数据来源**：RLDX-1 论文链接 **arXiv:2605.03269**；Being-H0.7 论文链接 **arXiv:2605.00078**；DM0 论文链接 **arXiv:2602.14974**；π0.5 LIBERO **97.7%** 来自 [vla-eval harness](https://arxiv.org/abs/2603.13966) 复现。
 2. **「是否优于 π0.5」**：有 π0.5 公开分数的主要为 **LIBERO（97.7%）**；其余榜用 **π0** 作参考并标明「π0.5 未测」。
 3. **未列入但值得跟踪的高分 2026 工作**（未达全局 Top3 但分数很高）：FutureVLA（LIBERO 98.3%）、PRTS（LIBERO 98.4%）、Cosmos Policy（LIBERO 98.5%）、FocusVLA（98.6%）等距 Top3 仅 **0.2–0.5pp**。
-4. **真机榜**：RoboChallenge 上 StarVLA-α Generalist **33.6%** 为榜内高位；RoboArena 以分布式真机偏好为主。
+4. **真机榜**：RoboChallenge Table30 上 DM0 Specialist **62.00%** / Generalist **37.3%** 为新增高位；RoboArena 以分布式真机偏好为主。
 5. **新综合框架**：VLA-Arena / CEBench（2025.12–2026）。
 6. **MolmoAct2 与 MolmoB0T 为不同论文**，勿混淆（前者 Allen AI ARM 推理型；后者 Allen AI 纯仿真训练 + 真机 zero-shot 79.2%）。
 
