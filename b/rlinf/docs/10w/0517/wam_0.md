@@ -472,3 +472,206 @@ WM 作为无限环境生成器，解决数据/环境瓶颈。
 - [57] Genie 2 / 3. Google DeepMind. Blog: https://deepmind.google/blog/genie-2-a-large-scale-foundation-world-model/
 - [58] Puppet-Master: Scaling Interactive Video Generation as a Motion Prior for Part-Level Dynamics. Oxford VGG. ICCV 2025. arXiv:2408.04631. https://vgg-puppetmaster.github.io/
 - [59] OA-WAM: Object-Addressable World Action Model for Robust Robot Manipulation. arXiv:2605.06481, 2026.
+
+
+# 原内容 1
+这是个很好的综合性问题。基于这 68 篇论文中涉及世界模型/WAM/视频生成的十几篇工作，我梳理出当前的主流用法、作用和关键经验。
+
+一、四种主流用法
+1. 视频-动作联合模型（WAM）—— 用视频生成骨干直接出动作
+以大型视频生成模型（Wan2.1/2.2、Cosmos-Predict2）为骨干，让同一个网络既能生成未来视频帧，又能输出动作序列。
+
+论文	骨干	做法	核心发现
+DreamZero	Wan2.1-I2V-14B	联合 video-action flow，零样本策略直接从 WAM 出	联合训练 >> 分离训练；AgiBot G1 真机 3× π0.5
+Fast-WAM	Wan2.2-5B + 1B action expert	shared-attention MoT mask 解耦视频与动作	训练时 video co-training >> 测试时 future imagination；推理可跳过视频生成
+GigaWorld-Policy	Wan2.2-5B	因果 WAM，causal mask 防未来帧影响动作 token	推理时不生成视频仍保 SOTA，9× 加速
+Psi-R2	Wan2.2	视频-动作联合 WAM，95kh 人类视频预训	人类视频规模化是关键
+STARRY	自研	时空-动作联合扩散 + 几何感知注意力	RoboTwin 2.0 SOTA 93.8%，真机 +28pp vs π0.5
+关键洞见：视频生成模型的物理先验（物体运动、接触、遮挡）天然适合操作任务。但 Fast-WAM 证明了一个违反直觉的结论：训练时让模型学视频生成（co-training）很重要，但推理时不需要真的去生成未来视频。视频生成在训练阶段起到的是"正则化/表征学习"作用，而非推理时的"想象-再行动"。
+
+2. 世界模型做预训练骨干 —— 用 WM 的物理表征初始化 VLA
+不做联合模型，而是用已训好的视频世界模型的权重/表征来初始化策略网络。
+
+论文	做法	效果
+Cosmos Policy	Cosmos-Predict2 世界模型全参微调为策略头	RoboCasa SOTA 67.1%；从零训显著降
+World2Act	在 Cosmos WM 上做技能组合后训练，contrastive latent 对齐	RoboCasa #2 66.3%；latent 对齐 >> RGB 像素监督（避开幻觉/伪影）
+Ψ0	世界模型蒸馏 + 人类视频自回归预训练	800h 人类视频 + 30h 真机 → 较 10× 数据基线 +40%
+GR00T N1.6	Cosmos-Reason-2B 做 VLM backbone	结合 Cosmos Reason 做任务分解
+关键洞见：视频世界模型在海量视频上学到的时空动力学表征，迁移到机器人策略上非常高效。Cosmos Policy 的消融直接说明"WM 预训练初始化"是涨分关键，去掉后断崖式下降。World2Act 进一步说明不要在像素空间对齐（会引入幻觉），而应该在 latent 空间用对比学习对齐。
+
+3. 世界模型当仿真器 —— 用 WM 生成的 rollout 做 VLA 后训练
+把世界模型当成一个"可微的仿真环境"，在里面跑 RL 来改进已有的 VLA。
+
+论文	做法	效果
+WoVR	WM 当 reliable sim，RL fine-tune VLA	LIBERO +29.3pp，真机 +30pp；但 WM 质量决定上限，低保真 WM 反而误导
+World-VLA-Loop	VLA↔WM 闭环共改进，失败轨迹回流 WM 训练	真机 +36.7%；失败轨迹回流是核心
+VLAW	WM + VLA 交替迭代训练，合成+真实数据混合	+39.2%；同步迭代 > 交替单边
+关键洞见：这条路线的瓶颈在 WM 本身的保真度。WoVR 明确指出低质量 WM 会把 VLA 训歪。World-VLA-Loop 的解法是让 VLA 的失败经验反过来改进 WM，形成闭环——这比单向"WM→VLA"有效得多。
+
+4. 潜在世界模型做辅助损失 —— 不生成像素，只预测 latent
+最轻量的用法：不做真正的视频生成，只在 latent 空间加一个预测未来状态的辅助 loss。
+
+论文	做法	效果
+VLA-JEPA	JEPA 式潜世界模型，预测 latent embedding 而非像素	LIBERO-Plus 鲁棒性提升，对视角扰动尤为有效
+FutureVLA	联合视觉-运动预测，gating 分离视觉保留与动作建模	LIBERO +0.6pp，可 plug-in 到多种 VLA
+MWM	用语义 mask替代 RGB 像素做 WM 预测目标	LIBERO 98.3%，RLBench 翻倍 vs RGB baseline；mask >> RGB
+关键洞见：MWM 的发现最有启发性——世界模型的预测目标不应该是 RGB 像素（太多外观噪声），而应该是几何/语义信息（mask），形成"信息瓶颈"迫使模型聚焦物理动力学和接触关系。
+
+二、什么真的起作用？—— 跨论文一致性结论
+从这些论文的消融实验中，能提炼出几条被反复验证的规律：
+
+1. 训练时 co-training >> 推理时 imagination
+Fast-WAM 和 GigaWorld-Policy 都证明：视频生成在训练阶段的价值是提供物理先验正则化，推理时可以完全跳过视频生成。这意味着"先想象未来再行动"这个直觉性框架不如"用视频预训练来学好的表征"有效。
+
+2. Latent 空间 >> 像素空间
+
+World2Act：contrastive latent 对齐 >> RGB 像素监督（避开幻觉）
+VLA-JEPA：预测 latent >> 重建像素
+MWM：语义 mask >> RGB 像素
+三篇独立工作指向同一结论：在像素空间做预测/监督会引入外观噪声、幻觉、伪影，在 latent/语义空间工作更鲁棒。
+
+3. 闭环 >> 单向
+World-VLA-Loop 和 VLAW 都说明 WM 和 VLA 应该互相改进，而不是"先训好 WM 再用 WM 训 VLA"的单向管线。失败经验回流到 WM 是关键。
+
+4. WM 质量是硬约束
+WoVR 明确指出 WM 保真度不够时，后训练的 VLA 会被误导。这是"WM 当 sim"路线的天花板。
+
+5. 联合训练 >> 分离训练
+DreamZero 和 CoLA-World 都表明视频和动作的联合训练优于先训视频模型再接动作头。但 CoLA-World 提醒需要 warm-up 防止表征坍塌。
+
+三、一句话总结
+当前最有效的范式是：用大型视频生成模型的物理先验做训练阶段的表征学习（co-training 或预训练初始化），在 latent 而非像素空间工作，推理时不需要显式生成视频。世界模型的价值在于"教会 VLA 理解物理"，而不是"运行时替 VLA 想象未来"。
+
+# 原内容 2 
+
+综合了广泛的网络搜索结果，以下按世界模型所扮演的角色分类，覆盖 30+ 个经过验证的系统。
+
+一、训练时表征学习（Co-training）
+视频生成任务作为辅助目标，训练时强迫模型学到物理先验，推理时不生成视频。
+
+系统	做法	验证	关键证据
+Fast-WAM	Wan2.2-5B + 1B action expert，MoT mask 解耦视频/动作	RoboTwin SOTA 91.8%	训练时 co-train >> 推理时 imagination；推理跳过视频仍 SOTA
+GigaWorld-Policy	因果 WAM，causal mask 防未来帧污染动作 token	RoboTwin +95% vs π0.5	推理不生成视频仍保性能，9× 加速
+GR-2 (ByteDance)	38M 视频片段 / 50B token 预训练，联合视频生成+动作预测	真机 100+ 任务 97.7%	网络规模视频预训练提供强物理先验
+LingBot-VA	视频帧+动作交织为单一序列，自回归预训练 1.4T token	LIBERO 98.5%，RoboTwin 90%+	光照/噪声/布局扰动鲁棒，但视角变化仍脆弱
+结论：这是目前 验证最充分、涨点最稳 的用法。核心洞见：视频生成在训练时起"物理正则化"作用，迫使表征编码运动、接触、遮挡等动力学信息。推理时不需要真的去想象未来。
+
+二、预训练骨干初始化
+用已训好的视频世界模型权重初始化策略网络，相当于"站在 WM 的肩膀上"。
+
+系统	骨干	验证	关键证据
+Cosmos Policy (NVIDIA)	Cosmos-Predict2 2B 全参微调	RoboCasa SOTA 67.1%，LIBERO 98.5%	去掉 WM 初始化断崖式下降；仅需 1/6 demo
+World2Act	Cosmos WM + contrastive latent 对齐	RoboCasa #2 66.3%	latent 对齐 >> RGB 像素监督（避开幻觉）
+Ψ0	世界模型蒸馏 + 人类视频预训	800h 人类视频+30h 真机 → +40%	数据效率极高
+GR00T N1.6 (NVIDIA)	Cosmos-Reason-2B	RoboCasa 官榜 #1	结合 Cosmos Reason 做任务推理与分解
+结论：最实用的路线之一。WM 在海量视频上学到的时空表征，迁移到机器人上非常高效。World2Act 的重要发现：不要在像素空间对齐（幻觉/伪影），应在 latent 空间用对比学习对齐。
+
+三、学到的仿真器（在 WM 想象中训 RL）
+把 WM 当成"可微仿真环境"，在里面跑 RL 改进策略，再部署到真机。
+
+系统	做法	验证	关键证据
+DayDreamer	Dreamer/RSSM 在真机在线学习，在想象中训 actor-critic	4 种真机：四足 1h 学会走路，UR5 3.1 物体/分钟	同超参跨所有实验；样本效率 >> model-free
+DreamerV3	RSSM + 全想象训练，单超参跨 150+ 任务	150+ 仿真任务 + Minecraft 从零挖钻石	从简单控制到 Minecraft 无需调参
+UniSim (ICLR 2024 杰出论文)	通用交互式视频仿真器，RL 在内部训练	真机零样本 sim2real 成功	RL 在 UniSim 内训练显著提升 VLA
+WoVR	WM 当 reliable sim 做 VLA 后训练	LIBERO +29pp，真机 +30pp	WM 质量决定上限，低保真 WM 反而误导
+World-VLA-Loop	VLA↔WM 闭环共改进，失败轨迹回流 WM	真机 +36.7%	失败经验回流 WM 是核心，单向不够
+EZ-M	共享 world model + Gumbel search，多任务 MBRL	HumanoidBench 10/14 任务 SOTA	16M 参数 vs BRC 1B；扩任务数 >> 扩单任务样本数
+TD-MPC2 (ICLR 2024)	无解码器 latent WM + planning，单超参跨 104 任务	104 仿真任务，DMControl 全部 >90%	规模化到 317M 参数，跨具身形态
+结论：这条路线的天花板是 WM 保真度。DayDreamer 证明了即使在真机上在线学 WM 也可行（1 小时学走路），但 WoVR 警告低质量 WM 会误导策略。World-VLA-Loop 的闭环是解法。
+
+四、视频规划器（先生成视频，再提取动作）
+WM 生成未来执行的视频，再用逆动力学或光流解码出动作。
+
+系统	做法	验证	关键证据
+UniPi (Google)	1.7B 视频扩散模型从文本生成轨迹视频 → 逆动力学提取动作	仿真多任务	泛化到未见语言组合；但 256+ TPU，推理极慢
+AVDC (ICLR 2024)	视频预测 → 光流 → RGBD 重建 3D 运动	真机 Franka (~20 demo)，90% 跨具身迁移	无需动作标签；遮挡时丢失跟踪
+SuSIE	InstructPix2Pix 生成目标子图像 → 目标条件策略执行	真机 Bridge	击败 RT-2-X（55B 参数，20× 训练数据）
+Dreamitate (CoRL 2024)	视频扩散从人类演示生成执行视频 → 3D 跟踪提取动作	真机 8 个未见物体	数据减少时仍稳定（Diffusion Policy 退化）
+RoboDreamer	组合式视频生成：语言拆为动词/介词短语 → 分别条件化	RT-X 数据集	组合分解使泛化到新指令组合
+Visual Foresight (Finn & Levine 2017)	奠基之作：动作条件视频预测 + MPC 规划	真机推拿新物体	无需标定/3D 模型/深度；开创了这条路线
+结论：这是最直觉的用法，但 compounding error 是致命问题——视频生成误差 × 逆动力学误差 双重累积。SuSIE 换了个思路（只生成一帧目标图像而非整段视频）反而效果更好，说明 生成越少、误差越小。
+
+五、潜在空间世界模型（不生成像素）
+不做真正的视频生成，只在 latent 空间加预测未来的辅助 loss 或做 MPC。
+
+系统	做法	验证	关键证据
+V-JEPA 2-AC (Meta)	V-JEPA 2 自监督预训练 → 300M action-conditioned WM → latent MPC	真机 Franka：reach 100%，操作 60-80%	仅 62h 无标签数据；16s/动作 vs Cosmos 4min
+VLA-JEPA	JEPA 式预测 latent embedding 而非像素	LIBERO-Plus 79.5%	视角扰动鲁棒性提升最显著
+MWM	语义 mask 替代 RGB 做 WM 预测目标	LIBERO 98.3%，RLBench 翻倍	mask >> RGB：几何信息瓶颈聚焦动力学
+DINO-WM	冻结 DINOv2 patch 特征 + ViT 动力学预测器 + MPC	仿真 Reacher/Push-T	SR 0.82 vs DreamerV3 0.76 vs IRIS 0.06
+Seer / PIDM (ICLR 2025 Oral)	预测未来视觉状态 → 逆动力学恢复动作，端到端单模型	CALVIN SOTA 4.28，真机 +43%	端到端 >> 两阶段解耦；清晰的 scaling 行为
+FutureVLA	联合视觉-运动预测 + gating 分离	LIBERO 98.3%，可 plug-in 多种 VLA	结构通用，不绑定特定 VLA
+LeWorldModel	极简 JEPA：只有两个 loss（预测+正则），15M 参数	2D/3D 控制任务	规划速度 48× 快于基础模型 WM，单 GPU
+结论：latent WM 是 性价比最高 的路线。V-JEPA 2-AC 用 62 小时无标签数据达到 60-80% 真机操作成功率，而且推理速度是 Cosmos Policy 的 15 倍。MWM 的发现最有启发性：预测目标应是 几何/语义信息 而非 RGB 像素。Seer 证明预测+逆动力学端到端优于两阶段。
+
+六、世界模型提供奖励信号
+用 WM 的视频预测给 RL 提供 dense reward，替代人工设计。
+
+系统	做法	验证	关键证据
+VIPER (NeurIPS 2023)	VideoGPT 在专家视频上训练，轨迹 log-likelihood 当 reward	15 DMC + 7 Atari + 6 RLBench	RLBench 上超过用 ground-truth sparse reward 的 oracle
+Diffusion Reward	条件视频扩散模型提供 reward	仿真	泛化优于 VIPER
+结论：反直觉的发现——VIPER 提供的 dense reward 比任务 oracle 的 sparse reward 还好，因为密集信号引导更有效。但有陷阱：高帧率时模型偏好静止轨迹，必须 4× 降采样。
+
+七、数据增广
+用生成模型创造新的训练场景/轨迹，扩充有限的真机数据。
+
+系统	做法	验证	关键证据
+ROSIE (Google)	Imagen Editor 文本引导修补：换物体/背景/干扰物	真机 RT-1	泛化到未见物体+干扰物显著提升
+DreMa (ICLR 2025)	物体级 Gaussian Splatting 重建 → 物理引擎中重排 → 渲染新 demo	真机 Franka one-shot	+13.1% 多任务 vs PerAct；需用 2DGS 修复深度伪影
+GR00T-Dreams (NVIDIA)	Cosmos WM 生成合成轨迹数据	GR00T N1.5	36 小时 生成数据 vs ~3 个月人工采集
+RoboSplat (RSS 2025)	3DGS 做 6 类真机泛化增广	真机	多种泛化场景验证
+MolmoBot-Engine	程序化生成 100k+ 环境 + 3DGS 高保真渲染	DROID 真机 79.2% vs π0.5 39.2%	纯仿真训练匹敌/超越大规模真机 VLA
+结论：数据增广是最无风险的用法——不改模型架构，不引入 compounding error，纯粹扩充数据。GR00T-Dreams 把 3 个月缩到 36 小时特别有说服力。MolmoBot 证明足够高保真的合成数据甚至可以完全替代真机数据。
+
+八、3D 场景表示做世界模型（NeRF / 3DGS）
+用显式 3D 表示做"几何世界模型"，支持任意视角渲染和碰撞推理。
+
+系统	做法	验证	关键证据
+Dex-NeRF	NeRF 渲染透明物体 → 抓取规划	真机 ABB YuMi	透明物体抓取 90-100%（深度传感器完全失败）
+SPARTN (CVPR 2023)	NeRF 合成新视角训练数据 → 6-DoF 抓取	真机 Franka	+22.5% 绝对提升（89% vs 30%）
+GWM (ICCV 2025)	3DGS 做 action-conditioned 未来状态预测 + MBRL	真机 Franka 65% (vs DP 35%)	高斯表示 vs 图像 WM：4% → 18-24%
+PEGS (CoRL 2024 Oral)	双高斯-粒子表示做物理可纠正数字孪生	真机 Franka 30Hz	策略永远作用于仿真机器人，真机跟随；60Hz 实时
+结论：NeRF/3DGS 在深度传感器失败的场景（透明、反光、镜面物体）有不可替代的价值。PEGS 的"real-is-sim"思路很有意思：不做 sim2real，而是让仿真跟踪真实。3DGS 的优势是实时渲染+可组合。
+
+九、安全约束 / 策略评估 / 环境工厂
+角色	系统	做法	关键证据
+安全约束	SafeVLA (NeurIPS 2025 Spotlight)	CMDP 框架约束 VLA 安全行为	安全性 +83.6%，任务性能 +3.9%；不安全上界降到 1/35
+策略评估	IRASim (ByteDance)	细粒度视频 WM 评估策略质量	与 MuJoCo 真值 Pearson r=0.99
+策略评估	Psi-W0	动作条件 WM 做策略评估与数据质检	配合 Psi-R2 形成训练闭环
+环境工厂	Genie 2/3 (DeepMind)	从单张图生成完整交互式 3D 世界	SIMA 2 在 Genie 环境中自我改进，接近人类水平
+十、总结：什么真的起作用？
+从 30+ 个系统的消融实验中，提炼出 被反复验证的共识：
+
+确定有效 ✓
+训练时 co-train >> 推理时 imagination（Fast-WAM、GigaWorld 独立验证）
+
+视频生成的价值在于训练时的物理正则化，不在推理时的想象
+Latent 空间 >> 像素空间（World2Act、VLA-JEPA、MWM、DINO-WM、Seer 五篇独立验证）
+
+像素预测引入外观噪声/幻觉/伪影，latent/语义空间更鲁棒
+WM 预训练初始化大幅提升数据效率（Cosmos Policy、Ψ0、GR-2）
+
+去掉初始化都断崖式下降；demo 需求降到 1/6
+高保真合成数据可以完全替代真机数据（MolmoBot 79.2% vs π0.5 39.2%）
+
+闭环 >> 单向（World-VLA-Loop、VLAW）
+
+WM 和 VLA 应互相改进，失败经验回流 WM
+生成越少越好（SuSIE 只生成一帧目标图 >> UniPi 生成整段视频）
+
+减少 compounding error
+已知陷阱 ✗
+低保真 WM 反而误导（WoVR 明确警告）
+视频 WM 在长 horizon 上空间漂移、物体消失（幻觉）
+视角/初始状态变化仍是软肋（LingBot-VA、多篇验证光照鲁棒但视角脆弱）
+RGB 视频做 reward 时偏好静止轨迹（VIPER 需 4× 降采样）
+两阶段管线（先视频后逆动力学）compounding error 严重（UniPi、AVDC）
+计算成本从数据侧转移到算力侧——不是免费午餐
+性价比排序（个人判断）
+排名	方法	理由
+1	数据增广（ROSIE / DreMa / GR00T-Dreams）	零架构改动，纯粹多数据，风险最低
+2	WM 预训练初始化（Cosmos Policy / GR-2）	一次性收益，demo 需求大幅降低
+3	训练时 co-training（Fast-WAM / GigaWorld）	涨点稳，推理无额外开销
+4	Latent WM 辅助 loss（VLA-JEPA / MWM / Seer）	轻量，可 plug-in，鲁棒性提升明确
+5	WM 当仿真器跑 RL（DayDreamer / UniSim）	潜力大但受 WM 保真度制约
+6	视频规划器（UniPi / AVDC）	直觉好但 compounding error + 算力开销重
